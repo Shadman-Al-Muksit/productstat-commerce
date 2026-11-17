@@ -120,10 +120,10 @@ test('staff order drawer prepares and cancels an order through real validated ac
   await page.getByPlaceholder('Search order or customer…').fill(order.number);
   await page.getByRole('button', {name:order.number,exact:true}).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Operation', {exact:true}).selectOption('prepare');
+  await dialog.getByRole('combobox', {name:'Operation',exact:true}).selectOption('prepare');
   await dialog.getByRole('button', {name:'Record event',exact:true}).click();
   await expect(dialog.locator('.badge.status-preparing')).toBeVisible();
-  await dialog.getByLabel('Operation', {exact:true}).selectOption('cancel');
+  await dialog.getByRole('combobox', {name:'Operation',exact:true}).selectOption('cancel');
   await dialog.locator('input[type="number"]').first().fill('1');
   await dialog.getByRole('button', {name:'Record event',exact:true}).click();
   await expect(dialog.locator('.badge.status-cancelled')).toBeVisible();

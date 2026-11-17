@@ -57,6 +57,7 @@ jobs:
             sleep 1
           done
       - run: bash scripts/async-check.sh
+        env: {CELERY_TASK_ALWAYS_EAGER: '0'}
       - run: npm run test:e2e
         working-directory: frontend
       - uses: actions/upload-artifact@v4
@@ -74,3 +75,23 @@ jobs:
       - run: docker build -f backend/Dockerfile -t productstat-backend .
       - run: docker build -f frontend/Dockerfile -t productstat-frontend .
       - run: docker build -f deploy/backup.Dockerfile -t productstat-backup .
+      - run: python3 deploy/ci-env.py
+      - run: docker compose --env-file .env.production config --quiet
+      - run: docker compose --env-file .env.production up -d --build --wait --wait-timeout 120
+      - run: docker compose --env-file .env.production exec -T backend python manage.py seed_demo --small
+      - run: python3 scripts/container-smoke.py --base https://localhost --allow-self-signed
+      - run: docker compose --env-file .env.production --profile maintenance build backup
+      - run: bash scripts/backup-compose.sh
+      - run: |
+          backup=$(find backups -maxdepth 1 -name '*.tar.gpg' | sort | tail -n 1)
+          test -n "$backup"
+          docker compose --env-file .env.production --profile maintenance run --rm backup scripts/verify_restore.py "/backups/$(basename "$backup")"
+      - run: docker compose --env-file .env.production ps
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-verification
+          path: .runtime/container-evidence.json
+      - run: docker compose --env-file .env.production down
+        if: always()

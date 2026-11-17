@@ -7,4 +7,4 @@ COPY backend /app
 RUN mkdir -p /app/private_media /app/staticfiles && chown -R app:app /app
 USER app
 EXPOSE 8001
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8001", "--workers", "3", "--timeout", "60", "--error-logfile", "-"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8001", "--workers", "4", "--threads", "4", "--timeout", "60", "--error-logfile", "-"]

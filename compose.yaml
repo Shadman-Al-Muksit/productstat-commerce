@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
   backend:
     <<: *app
-    command: [sh, -c, 'python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8001 --workers 3 --timeout 60 --error-logfile -']
+    command: [sh, -c, 'python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8001 --workers 4 --threads 4 --timeout 60 --error-logfile -']
     depends_on: {db: {condition: service_healthy}, redis: {condition: service_started}}
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/v1/health/', timeout=5)"]

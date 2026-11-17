@@ -4,7 +4,7 @@ source "$(dirname "$0")/env.sh"
 export DJANGO_DEBUG=0
 python "$PROJECT_ROOT/scripts/prepare-load.py"
 cd "$PROJECT_ROOT/backend"
-gunicorn config.wsgi:application --bind 127.0.0.1:8002 --workers 4 --threads 2 --timeout 60 --error-logfile "$PROJECT_ROOT/.runtime/load-server.log" > "$PROJECT_ROOT/.runtime/load-requests.log" 2>&1 &
+gunicorn config.wsgi:application --bind 127.0.0.1:8002 --workers 4 --threads 4 --timeout 60 --error-logfile "$PROJECT_ROOT/.runtime/load-server.log" > "$PROJECT_ROOT/.runtime/load-requests.log" 2>&1 &
 server_pid=$!
 trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 for attempt in $(seq 1 40); do
