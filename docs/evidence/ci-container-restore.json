@@ -1,0 +1,27 @@
+{
+  "source_run_url": "https://github.com/Shadman-Al-Muksit/productstat-commerce/actions/runs/44015893889",
+  "source_commit": "3bd432a82dfc915d6be4a5d423c368f6897b0011",
+  "fixture_size": {"seed_orders": 300, "skus": 80, "orders_after_smoke": 301, "lines_after_smoke": 901},
+  "source": "productstat",
+  "matches": true,
+  "private_files_verified": 1,
+  "elapsed_seconds": 0.26,
+  "expected": {
+    "orders": ["301", "4110960.00"],
+    "lines": ["901", "1826", "1570", "55"],
+    "inventory": ["80", "5447", "0"],
+    "payments": ["260", "3516150.00", "3120200.00"],
+    "refunds": ["55", "112200.00"],
+    "settlements": ["233", "3120200.00"]
+  },
+  "restored": {
+    "orders": ["301", "4110960.00"],
+    "lines": ["901", "1826", "1570", "55"],
+    "inventory": ["80", "5447", "0"],
+    "payments": ["260", "3516150.00", "3120200.00"],
+    "refunds": ["55", "112200.00"],
+    "settlements": ["233", "3120200.00"]
+  },
+  "backup_sha256": "fd1df6d8dd2eb3f01ca3f5d1876de79c50d5b5ad4c5f72adec8aeb723df99d5a",
+  "isolated_target": "productstat_restore_904bc596022f"
+}

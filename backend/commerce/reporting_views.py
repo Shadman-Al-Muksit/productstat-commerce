@@ -1,5 +1,6 @@
 import csv
 import io
+from uuid import UUID
 
 from django.http import HttpResponse
 from django.urls import path
@@ -10,7 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from .reporting import analytics, drilldown, filters_from_params
+from .reporting import analytics, drilldown, filters_from_params, variant_analytics
 from .reporting_cache import cached_overview
 from .permissions import IsStaffReader
 
@@ -18,10 +19,12 @@ from .permissions import IsStaffReader
 class ReportingSummary(serializers.Serializer):
     orders = serializers.IntegerField()
     ordered_units = serializers.IntegerField()
+    cancelled_units = serializers.IntegerField()
     ordered_value = serializers.CharField()
     delivered_units = serializers.IntegerField()
     delivered_value = serializers.CharField()
     returned_units = serializers.IntegerField()
+    returned_value = serializers.CharField()
     refunded_amount = serializers.CharField()
     net_delivered_value = serializers.CharField()
 
@@ -31,6 +34,7 @@ class ReportingCohort(serializers.Serializer):
     returned_units = serializers.IntegerField()
     return_rate = serializers.FloatField(allow_null=True)
     open_window_units = serializers.IntegerField()
+    unresolved_cases = serializers.IntegerField()
     preliminary = serializers.BooleanField()
     as_of = serializers.DateTimeField()
     basis = serializers.CharField()
@@ -43,6 +47,7 @@ class ReportingCash(serializers.Serializer):
     cod_collected_amount = serializers.CharField()
     online_collected_amount = serializers.CharField()
     settled_amount = serializers.CharField()
+    refunded_amount = serializers.CharField()
     exception_collected_amount = serializers.CharField()
     sandbox_collected_amount = serializers.CharField()
     basis = serializers.CharField()
@@ -88,6 +93,23 @@ class ReportingMeta(serializers.Serializer):
     customer_data = serializers.CharField()
     basis = serializers.CharField()
     money_basis = serializers.CharField()
+    cancellation_basis = serializers.CharField()
+
+
+class ReturnReason(serializers.Serializer):
+    reason = serializers.CharField()
+    units = serializers.IntegerField()
+    count = serializers.IntegerField(allow_null=True)
+
+
+class ReportingCoverage(serializers.Serializer):
+    missing_order_date_units = serializers.IntegerField()
+    missing_delivery_date_units = serializers.IntegerField()
+    missing_return_date_units = serializers.IntegerField()
+    cancelled_units_without_dated_event = serializers.IntegerField()
+    undated_collection_amount = serializers.CharField()
+    undated_settlement_amount = serializers.CharField()
+    basis = serializers.CharField()
 
 
 class AnalyticsResponse(serializers.Serializer):
@@ -100,6 +122,8 @@ class AnalyticsResponse(serializers.Serializer):
     trend = ReportingTrend(many=True)
     products = ReportingProduct(many=True)
     meta = ReportingMeta()
+    return_reasons = ReturnReason(many=True)
+    coverage = ReportingCoverage()
 
 
 class DrilldownRow(serializers.Serializer):
@@ -109,7 +133,7 @@ class DrilldownRow(serializers.Serializer):
     product_name = serializers.CharField()
     sku = serializers.CharField()
     quantity = serializers.IntegerField(allow_null=True)
-    value = serializers.CharField()
+    value = serializers.CharField(allow_null=True)
     event_at = serializers.DateTimeField()
     status = serializers.CharField()
     source = serializers.CharField()
@@ -123,9 +147,43 @@ class DrilldownResponse(serializers.Serializer):
     results = DrilldownRow(many=True)
 
 
+class VariantRow(serializers.Serializer):
+    sku_id = serializers.UUIDField()
+    code = serializers.CharField()
+    label = serializers.CharField()
+    is_active = serializers.BooleanField()
+    ordered_units = serializers.IntegerField()
+    cancelled_units = serializers.IntegerField()
+    delivered_units = serializers.IntegerField()
+    returned_units = serializers.IntegerField()
+    delivered_value = serializers.CharField()
+    returned_value = serializers.CharField()
+    refunded_amount = serializers.CharField()
+    net_delivered_value = serializers.CharField()
+
+
+class VariantProduct(serializers.Serializer):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+
+
+class VariantFilters(serializers.Serializer):
+    product_id = serializers.UUIDField()
+    start = serializers.DateField()
+    end = serializers.DateField()
+    timezone = serializers.CharField()
+    currency = serializers.CharField()
+
+
+class VariantResponse(serializers.Serializer):
+    product = VariantProduct()
+    filters = VariantFilters()
+    results = VariantRow(many=True)
+
+
 FILTER_PARAMETERS = [OpenApiParameter("start", OpenApiTypes.DATE), OpenApiParameter("end", OpenApiTypes.DATE),
                      OpenApiParameter("product_ids", OpenApiTypes.STR, description="Comma-separated UUIDs; at most 20.")]
-METRIC_PARAMETER = OpenApiParameter("metric", OpenApiTypes.STR, enum=["orders", "ordered_units", "delivered_units", "returned_units", "refunds"])
+METRIC_PARAMETER = OpenApiParameter("metric", OpenApiTypes.STR, enum=["orders", "ordered_units", "cancelled_units", "delivered_units", "returned_units", "refunds"])
 
 
 @extend_schema(operation_id="analytics_overview", parameters=FILTER_PARAMETERS, responses=AnalyticsResponse, tags=["Analytics"])
@@ -138,6 +196,22 @@ def overview(request):
     response = Response(payload)
     response["X-Analytics-Cache"] = cache_status
     # Browser/proxy caches must not bypass the committed revision check.
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@extend_schema(operation_id="analytics_variants", parameters=[OpenApiParameter("product_id", OpenApiTypes.UUID, required=True),
+                                                             OpenApiParameter("start", OpenApiTypes.DATE), OpenApiParameter("end", OpenApiTypes.DATE)],
+               responses=VariantResponse, tags=["Analytics"])
+@api_view(["GET"])
+@permission_classes([IsStaffReader])
+def variants(request):
+    try:
+        product_id = str(UUID(request.query_params.get("product_id", "")))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise ValidationError({"product_id": "One product UUID is required."}) from exc
+    filters = filters_from_params({"start": request.query_params.get("start"), "end": request.query_params.get("end"), "product_ids": product_id})
+    response = Response(variant_analytics(product_id, filters))
     response["Cache-Control"] = "private, no-store"
     return response
 
@@ -181,4 +255,4 @@ def export(request):
     return response
 
 
-urlpatterns = [path("", overview), path("drilldown/", detail), path("export/", export)]
+urlpatterns = [path("", overview), path("variants/", variants), path("drilldown/", detail), path("export/", export)]

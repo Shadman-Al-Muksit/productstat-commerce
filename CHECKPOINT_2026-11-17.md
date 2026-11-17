@@ -1,6 +1,38 @@
-# ProductStat checkpoint — 17 November 2026
+# ProductStat checkpoint — STOPPED, 17 November 2026
 
-Saved at approximately 12:05 Asia/Dhaka after the user requested a checkpoint. The user then explicitly said **Continue**, so implementation is authorized to resume from this state.
+**Latest instruction: stop.** Saved at approximately **12:25 Asia/Dhaka** after a renewed explicit stop request. Do not resume implementation, tests, deployment or scheduling without a new user instruction. The earlier Continue at12:05 is superseded by this later stop.
+
+## Latest state at the stop
+
+- All agents were interrupted. No ProductStat application, frontend build, pytest or profiling processes were observed after cleanup. PostgreSQL/Redis persistence and the sibling student-erp project were left unchanged.
+- This snapshot is unfinished work, not a verified release. Save it on `checkpoint/2026-11-17-paused-hardening`, keeping main's earlier verified source separate. Use a `[skip ci]` checkpoint commit so saving does not start another test run after the stop request.
+- Model migrations0005 and0006 are applied to the preserved local database: import fingerprints, nullable historical order/dispatch dates, import settlement dates, current historical revisions and protected supersedes links. Live orders still require dates and remain current. No reset was performed.
+- Core/monitoring focused suite:44 passed in28.76seconds before root's additional calendar-day return test. Reporting focused suite:26 passed before the later performance edit. Import agent confirmed28 passing focused tests in10.43seconds; strict OpenAPI with fail-on-warning, Django checks and migration consistency also completed successfully before the stop.
+- Frontend types and formatting passed. The latest optimized build compiled and completed TypeScript/static generation, but was stopped during trace collection. **Do not claim that latest build completed.** The earlier build and four browser tests passed before the newest hardening changes; the new five-test browser suite has not run.
+- Two-minute k6: **2,452 requests, zero errors**. Catalogue p95 **513.79ms**, passes1000ms target. Analytics p95 **2348.54ms**, fails2000ms target. Do not replace this failure with the older passing30-second result. Private raw summary is `.runtime/k6-summary-before-query-tuning.json`; `.runtime/k6-summary.json` also holds that failed candidate run.
+- Profiling before optimization: default report2.149s, full-year2.544s; activity query uses an external merge spilling about10.6MB to disk over147,465 event rows. Evidence/scripts: `.runtime/report-profile-before.json`, `.runtime/profile_reporting.py`. They are private runtime artifacts, not published evidence yet.
+- **Untested change in reporting.py:** removed DISTINCT order counting from the large activity GROUPING SETS query and added a separate creation-only order-count query. No test/profile/benchmark has run afterward. Cohort and coverage optimizations have not been implemented. Cache TTL remains30seconds and wait remains1.8seconds; premature fallback can duplicate cold computations.
+- **Required pending privacy fix:** return-reason reports currently emit raw free text. Normalize only known reason categories and map unrecognized free text to Other/unspecified before exposing it to analysts. Preserve the original staff record. Add a regression with a private name/phone. Do not expose raw free-text reasons through analytical CSV/drilldowns.
+- **Required pending coverage fix:** unknown refund dates are accepted by the new importer, but coverage.undated_refund_amount is not yet implemented. The frontend row is already wired and will show a dash until the backend/schema support it.
+- Administrator correction API/UI is written: preview before/after totals, reason and expected old revision; durable commit creates a linked current revision and keeps old financial/event records. Final combined and browser verification is still required. The five-test Playwright suite adds this journey, pending execution.
+- **Known import race to fix first:** correction preview/prepare currently permits queued/validating batches. A validator's stale final save could overwrite an approved/completed correction. Restrict correction approval and preview.can_correct to ready/failed batches, then add a regression for the validation-state guard. This bug was identified after the passing import tests and deliberately left unchanged at the stop.
+- Root fixed live return eligibility to use Dhaka calendar-day boundaries and added an unrun final-day/next-day test. Reporting's calendar-day alignment passed the earlier focused suite.
+- Full recovery5.45s passed before0005/0006; repeat after final schema changes. Actual asynchronous import/restart evidence predates new fingerprint/revision code and should be rerun when resuming.
+- Caddy container health now checks its internal loopback admin endpoint rather than assuming a production domain certificate covers localhost. New Compose change needs the next actual container CI run.
+
+## Next actions after an explicit resume
+
+1. Read this entire checkpoint and live git status; keep the preserved database. Review/test the unverified report order-count edit.
+2. Finish the reason-category privacy and undated-refund coverage fixes. Optimize actual cohort/coverage bottlenecks and bounded cache stampede handling without altering the acceptance workload or TTL to disguise failures.
+3. Complete strict OpenAPI/client regeneration, the combined backend suite and a fresh optimized frontend build. Run all five Playwright journeys with a real worker; CI now starts its browser worker after the separate restart test to avoid interference.
+4. Run two-minute k6 alone, with no concurrent builds/tests, until the unchanged targets are met or report the remaining performance gap honestly. Repeat asynchronous worker verification and encrypted recovery for the final candidate.
+5. Publish only allowlisted synthetic evidence, finalize validation docs, scan staged paths/secrets, commit/push the tested candidate and verify the exact HEAD in CI. Public hosting, SMTP, merchant payments and off-server backup delivery remain separate external gates.
+
+The latest estimate given was **about15–20% of local v1 remaining**, approximately **2–4 more hours of active assistant work**, subject to regression findings. It is a rough estimate, not a guarantee. No work is scheduled to continue automatically.
+
+## Earlier 12:05 snapshot (historical context)
+
+The following details describe the earlier checkpoint. Where they conflict with the latest stop state above, use the latest state.
 
 ## Repository and preference
 

@@ -58,6 +58,8 @@ jobs:
           done
       - run: bash scripts/async-check.sh
         env: {CELERY_TASK_ALWAYS_EAGER: '0'}
+      - run: |
+          (cd backend && CELERY_TASK_ALWAYS_EAGER=0 celery -A config worker --pool=solo --loglevel=WARNING) > /tmp/productstat-worker.log 2>&1 &
       - run: npm run test:e2e
         working-directory: frontend
       - uses: actions/upload-artifact@v4

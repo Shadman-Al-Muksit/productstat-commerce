@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta
+from datetime import datetime,timedelta
 from decimal import Decimal
 from unittest.mock import Mock,patch
 from threading import Barrier
@@ -12,7 +12,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
-from commerce.models import CompanySettings,DeliveryZone,Order,OrderLine,Product,SKU,User,Refund,RefundLine,StockMovement,Payment,PaymentSettlement,ReturnRequest,OutboxEvent,AuditEvent
+from commerce.models import CompanySettings,DeliveryZone,Order,OrderLine,Product,SKU,User,Refund,RefundLine,StockMovement,Payment,PaymentSettlement,ReturnRequest,OutboxEvent,AuditEvent,Shipment
 from commerce import services,payments
 
 pytestmark=pytest.mark.django_db
@@ -229,6 +229,33 @@ def test_history_cannot_mutate_stock_or_payments(catalog,payload,admin):
     with pytest.raises(ValidationError): services.cancel_order(order.id,admin)
     with pytest.raises(ValidationError): services.order_action(order.id,'dispatch',{},admin)
 
+def test_unknown_historical_dates_remain_null_and_live_order_time_is_required():
+    historical=Order.objects.create(number='UNKNOWN-HISTORICAL',customer_name='Imported record',is_historical=True,created_at=None)
+    shipment=Shipment.objects.create(order=historical,dispatched_at=None,state='delivered')
+    payment=Payment.objects.create(order=historical,method='cod',amount=100,settled_amount=40)
+    settlement=PaymentSettlement.objects.create(payment=payment,amount=40,settled_at=None,reference='undated-source-transfer',source='import')
+    historical.refresh_from_db();shipment.refresh_from_db();settlement.refresh_from_db()
+    assert historical.created_at is None and shipment.dispatched_at is None and settlement.settled_at is None
+    assert payment.created_at is not None  # Ingestion clock is not a claimed source collection date.
+    with pytest.raises(IntegrityError),transaction.atomic():
+        Order.objects.create(number='INVALID-LIVE-TIME',customer_name='Live record',created_at=None)
+
+def test_historical_revision_retains_ledger_and_only_one_current_source_identity():
+    original=Order.objects.create(number='ORIGINAL-HISTORY',customer_name='Imported record',source='csv:review',external_id='source-A',is_historical=True)
+    payment=Payment.objects.create(order=original,method='cod',amount=100,settled_amount=40)
+    event=PaymentSettlement.objects.create(payment=payment,amount=40,settled_at=timezone.now(),reference='original-transfer',source='import')
+    with transaction.atomic():
+        original.is_current=False;original.save(update_fields=['is_current'])
+        replacement=Order.objects.create(number='REVISED-HISTORY',customer_name='Corrected record',source=original.source,external_id=original.external_id,is_historical=True,supersedes=original)
+    original.refresh_from_db();payment.refresh_from_db();event.refresh_from_db()
+    assert not original.is_current and replacement.is_current and original.revisions.get()==replacement
+    assert event.payment_id==payment.id and payment.order_id==original.id and payment.settled_amount==Decimal('40')
+    assert Order.objects.filter(source=original.source,external_id=original.external_id,is_current=True).count()==1
+    with pytest.raises(IntegrityError),transaction.atomic():
+        Order.objects.create(number='DUPLICATE-CURRENT',customer_name='Duplicate',source=original.source,external_id=original.external_id,is_historical=True)
+    with pytest.raises(IntegrityError),transaction.atomic():
+        Order.objects.create(number='INVALID-ARCHIVED-LIVE',customer_name='Live record',is_current=False)
+
 @pytest.mark.parametrize('callback_status',['INVALID','FAILED'])
 def test_payment_callback_cannot_trust_posted_success(catalog,payload,settings,callback_status):
     settings.SSLCOMMERZ_STORE_ID='test';settings.SSLCOMMERZ_STORE_PASSWORD='test'
@@ -407,3 +434,17 @@ def test_first_concurrent_api_checkout_retries_share_session_identity(catalog,pa
     assert responses[0][1]['access_token']==responses[1][1]['access_token']
     assert Order.objects.count()==1
     sku=catalog[2];sku.refresh_from_db();assert sku.reserved==2
+
+def test_return_window_ends_at_dhaka_calendar_day_boundary(catalog,payload,admin):
+    order=place(catalog,payload)
+    deliver(order,admin)
+    delivered_at=datetime.fromisoformat('2026-11-01T00:10:00+06:00')
+    Order.objects.filter(pk=order.id).update(created_at=delivered_at-timedelta(days=1),delivered_at=delivered_at)
+    line=order.lines.get()
+    data={'reason':'Synthetic calendar boundary','lines':[{'order_line_id':str(line.id),'quantity':1}]}
+    # More than seven elapsed days, but still the seventh Dhaka calendar day.
+    with patch('commerce.services.timezone.now',return_value=datetime.fromisoformat('2026-11-08T23:59:59+06:00')):
+        assert services.request_return(order.id,data).status=='requested'
+    with patch('commerce.services.timezone.now',return_value=datetime.fromisoformat('2026-11-09T00:00:00+06:00')):
+        with pytest.raises(ValidationError,match='window has closed'):
+            services.request_return(order.id,data)

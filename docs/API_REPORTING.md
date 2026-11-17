@@ -9,18 +9,22 @@ All endpoints are below `/api/v1/`. Analytics permits the administrator, operato
 ```json
 {
   "filters": {"start":"2026-01-01","end":"2026-01-31","timezone":"Asia/Dhaka","product_ids":[],"currency":"BDT"},
-  "summary": {"orders":100,"ordered_units":300,"ordered_value":"150000.00","delivered_units":250,"delivered_value":"125000.00","returned_units":10,"refunded_amount":"5000.00","net_delivered_value":"120000.00"},
-  "cohort": {"delivered_units":250,"returned_units":12,"return_rate":4.8,"open_window_units":20,"preliminary":true,"as_of":"2026-02-01T12:00:00+06:00","basis":"Delivered units in the selected interval, accepted returns observed to date; split deliveries allocate accepted returns FIFO."},
-  "cash": {"scope":"company","product_filter_applied":false,"collected_amount":"130000.00","cod_collected_amount":"100000.00","online_collected_amount":"30000.00","settled_amount":"90000.00","exception_collected_amount":"0.00","sandbox_collected_amount":"0.00","basis":"Recorded cash event dates; includes shipping/tax, always company-wide. Sandbox/demo records are not real funds."},
+  "summary": {"orders":100,"ordered_units":300,"cancelled_units":5,"ordered_value":"150000.00","delivered_units":250,"delivered_value":"125000.00","returned_units":10,"returned_value":"6000.00","refunded_amount":"5000.00","net_delivered_value":"119000.00"},
+  "cohort": {"delivered_units":250,"returned_units":12,"return_rate":4.8,"open_window_units":20,"unresolved_cases":2,"preliminary":true,"as_of":"2026-02-01T12:00:00+06:00","basis":"Delivered units in the selected interval; preliminary while return windows or linked cases remain unresolved."},
+  "cash": {"scope":"company","product_filter_applied":false,"collected_amount":"130000.00","cod_collected_amount":"100000.00","online_collected_amount":"30000.00","settled_amount":"90000.00","refunded_amount":"5500.00","exception_collected_amount":"0.00","sandbox_collected_amount":"0.00","basis":"Recorded cash event dates; includes shipping/tax, always company-wide. Sandbox/demo records are not real funds."},
   "delivery": {"delivered_shipments":85,"failed_shipments":8,"returned_to_origin_shipments":7,"terminal_shipments":100,"success_rate":85.0,"basis":"Delivered / (delivered + failed + returned to origin), terminal event date. Pending shipments excluded."},
   "comparison": {"start":"2025-12-01","end":"2025-12-31","summary":{},"change_percent":{}},
-  "trend": [{"date":"2026-01-01","ordered_value":"5000.00","delivered_value":"4500.00","refunded_amount":"0.00","ordered_units":10,"delivered_units":9,"returned_units":0}],
-  "products": [{"id":"uuid","name":"Everyday Tote","category":"Bags","image_url":"/products/tote.svg","ordered_units":30,"delivered_units":25,"returned_units":1,"delivered_value":"12500.00","refunded_amount":"500.00","net_delivered_value":"12000.00"}],
-  "meta": {"generated_at":"2026-02-01T12:00:00+06:00","basis":"Activity uses each event date; return cohort follows deliveries in the selected period, observed to date.","customer_data":"Excluded","money_basis":"Merchandise after discounts; excludes shipping and tax. Not accounting profit."}
+  "trend": [{"date":"2026-01-01","ordered_value":"5000.00","delivered_value":"4500.00","returned_value":"0.00","refunded_amount":"0.00","net_delivered_value":"4500.00","ordered_units":10,"cancelled_units":1,"delivered_units":9,"returned_units":0}],
+  "products": [{"id":"uuid","name":"Everyday Tote","category":"Bags","image_url":"/products/tote.svg","ordered_units":30,"cancelled_units":1,"delivered_units":25,"returned_units":1,"delivered_value":"12500.00","returned_value":"500.00","refunded_amount":"300.00","net_delivered_value":"12000.00"}],
+  "return_reasons": [{"reason":"Size or preference","units":10,"count":7}],
+  "coverage": {"missing_order_date_units":0,"missing_delivery_date_units":2,"missing_return_date_units":0,"cancelled_units_without_dated_event":3,"undated_collection_amount":"100.00","undated_settlement_amount":"0.00","basis":"All matching current history, not selected interval; unit coverage follows product filters, monetary coverage is company-wide."},
+  "meta": {"generated_at":"2026-02-01T12:00:00+06:00","basis":"Activity uses each event date; return cohort follows deliveries in the selected period, observed to date.","customer_data":"Excluded","money_basis":"Delivered merchandise minus accepted returned merchandise; cash refunds separate, shipping/tax excluded.","cancellation_basis":"Observed cancellation/expiry reservation-release events only; undated historical snapshots excluded."}
 }
 ```
 
-Activity returns and cohort returns intentionally differ: January delivery-cohort returns can be accepted in February. `preliminary` flags deliveries still inside the configured return window. Zero denominators yield `null` rates. The equal-length previous interval supplies comparison values; a zero prior value yields `null` percent change. Cash totals remain company-wide when products are selected, because actual payments include order-level shipping and tax. Verified exception receipts are included and separately identified as refund obligations. Refund merchandise amounts subtract immutable tax/shipping allocations from cash refund-line amounts.
+Activity returns and cohort returns intentionally differ: January delivery-cohort returns can be accepted in February. `preliminary` stays true for open return windows **or** unresolved linked cases; `unresolved_cases` counts distinct requested/approved/received cases, after product filtering. Zero denominators yield `null` rates. The equal-length previous interval supplies comparison values; a zero prior value yields `null` percent change. `net_delivered_value = delivered_value - returned_value`: accepted inspection reduces net before a refund is paid, and later cash payout does not subtract again. `summary.refunded_amount` remains confirmed merchandise refunds after tax/shipping allocation; `cash.refunded_amount` is actual full confirmed cash refund value. All cash totals stay company-wide when products are selected. Verified exception receipts are separately identified as refund obligations.
+
+`return_reasons` groups accepted quantities by inspection date and saved reason; `count` is distinct requests, not line count. Rejected/unaccepted quantities are excluded. Legacy snapshot-only reason rows are explicitly unknown and have `count: null`. `coverage` spans all current matching history rather than the selected interval: it discloses facts whose unknown dates prevent period attribution. Reviewed historical corrections retain old evidence but every report includes only the current revision.
 
 `cash.settled_amount` sums individual settlement events in the interval; it never sums a payment's cumulative balance on its latest timestamp. Legacy aggregate settlement events retain explicitly limited historical provenance, described in `METRICS.md`.
 
@@ -28,13 +32,21 @@ HTTP overviews use a shared cache for up to 30 seconds, invalidated by committed
 
 `GET analytics/drilldown/?metric=delivered_units&start=...&end=...&page=1&page_size=50`
 
-Metrics: `orders`, `ordered_units`, `delivered_units`, `returned_units`, `refunds`. Rows exclude customer names, emails, phones and addresses.
+Metrics: `orders`, `ordered_units`, `cancelled_units`, `delivered_units`, `returned_units`, `refunds`. Cancellation rows use observed movement dates and saved order-line values; missing historical dates are not invented. Rows exclude customer names, emails, phones and addresses.
 
 ```json
 {"metric":"delivered_units","count":1,"page":1,"page_size":50,"results":[{"id":"uuid","order_number":"PS-000001","product_id":"uuid","product_name":"Everyday Tote","sku":"BAG-0001","quantity":2,"value":"1000.00","event_at":"2026-01-04T10:00:00+06:00","status":"delivered","source":"demo"}]}
 ```
 
 `GET analytics/export/?metric=delivered_units&start=...&end=...` downloads exactly the same filtered, redacted rows as the drill-down, without pagination.
+
+`GET analytics/variants/?product_id=<one UUID>&start=...&end=...` provides an uncached single-product variant breakdown. It requires the same analytics roles and dates as the overview, includes inactive/zero-activity variants, and groups by stable SKU UUID rather than mutable code. Returned quantities/value are accepted inspection activity, and net subtracts that returned merchandise value independently of cash refunds.
+
+```json
+{"product":{"id":"uuid","name":"Everyday Tote"},"filters":{"start":"2026-01-01","end":"2026-01-31","timezone":"Asia/Dhaka","currency":"BDT","product_id":"uuid"},"results":[{"sku_id":"uuid","code":"FRM-00001","label":"Sand","is_active":true,"ordered_units":10,"cancelled_units":1,"delivered_units":8,"returned_units":1,"delivered_value":"7120.00","returned_value":"890.00","refunded_amount":"0.00","net_delivered_value":"6230.00"}]}
+```
+
+Exactly one existing `product_id` is required: missing/malformed values return 400 and unknown products return 404. The response excludes customer information. This endpoint does not change the overview query or shared cache.
 
 ## Imports
 

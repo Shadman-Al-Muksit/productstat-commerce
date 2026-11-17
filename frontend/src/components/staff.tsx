@@ -129,6 +129,97 @@ export function StaffPage({ section }: { section: string }) {
   if (section === "settings") return <Settings />;
   return <Overview />;
 }
+function OperationsHealth() {
+  const [data, setData] = useState<Row | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState("");
+  const reload = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    try {
+      setData(await api<Row>("staff/operations-health/"));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+  return (
+    <section className="panel" aria-label="Operations health">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">REVIEW BEFORE IT BECOMES A PROBLEM</p>
+          <h2>Operations health</h2>
+        </div>
+        <button
+          className="button small secondary"
+          onClick={reload}
+          disabled={busy}
+        >
+          <RefreshCw size={15} /> Refresh
+        </button>
+      </div>
+      <Notice message={error} />
+      {busy ? (
+        <Loading />
+      ) : (
+        data && (
+          <>
+            <div className="stats-grid">
+              <Stat
+                label="COD orders waiting 48+ hours"
+                value={num(data.counts.overdue_cod_orders)}
+                note="Undispatched; review before proceeding"
+              />
+              <Stat
+                label="Exhausted background jobs"
+                value={num(data.counts.failed_outbox_jobs)}
+                note="Retries exhausted; administrator review"
+              />
+              <Stat
+                label="Failed imports"
+                value={num(data.counts.failed_imports)}
+                note="Inspect validation and recovery reports"
+              />
+              <Stat
+                label="Payment exceptions"
+                value={num(data.counts.payment_exceptions)}
+                note="Captured funds still need reconciliation"
+              />
+            </div>
+            {data.overdue_cod_orders?.length > 0 && (
+              <DataTable
+                data={data.overdue_cod_orders}
+                columns={[
+                  { accessorKey: "number", header: "Order" },
+                  {
+                    accessorKey: "status",
+                    header: "Status",
+                    cell: ({ getValue }) => <Badge value={getValue()} />,
+                  },
+                  { accessorKey: "age_hours", header: "Hours waiting" },
+                  {
+                    accessorKey: "created_at",
+                    header: "Placed",
+                    cell: ({ getValue }) => <DateText value={getValue()} />,
+                  },
+                ]}
+              />
+            )}
+            <p className="muted">
+              Review flags do not cancel orders or change payment states. Up to{" "}
+              {data.sample_limit} overdue orders are shown; counts cover all
+              matching records.
+            </p>
+          </>
+        )
+      )}
+    </section>
+  );
+}
 function Overview() {
   const { bootstrap } = useApp();
   const [data, setData] = useState<Row | null>(null);
@@ -181,11 +272,12 @@ function Overview() {
           note="Inspected and accepted"
         />
         <Stat
-          label="Refunds confirmed"
+          label="Merchandise refunds"
           value={data ? money(s.refunded_amount) : "—"}
-          note="Confirmed money events"
+          note="Confirmed; excludes tax and shipping"
         />
       </div>
+      <OperationsHealth />
       <div className="workspace-two">
         <section className="panel">
           <div className="panel-heading">

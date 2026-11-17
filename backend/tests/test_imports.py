@@ -11,7 +11,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from commerce.imports import SCHEMAS, commit_batch, stage_upload, validate_batch
-from commerce.models import ImportBatch, Order, OrderLine, OutboxEvent, PaymentSettlement, Product, Refund, ReturnRequest, Shipment, SKU, StockMovement
+from commerce.models import AuditEvent, ImportBatch, Order, OrderLine, OutboxEvent, Payment, PaymentSettlement, Product, Refund, ReturnRequest, Shipment, SKU, StockMovement
 from commerce.tasks import deliver_outbox
 
 
@@ -60,14 +60,23 @@ def test_history_repeat_is_idempotent_and_does_not_change_stock(import_data, set
     assert StockMovement.objects.count() == 0
 
 
-def test_positive_delivery_requires_timestamp(import_data, settings, tmp_path):
+def test_unknown_historical_dates_remain_null_without_inventory_side_effects(import_data, settings, tmp_path):
     settings.MEDIA_ROOT = tmp_path
     _, actor = import_data
-    batch = stage_upload(kind="history", source_name="missing-time", files=[upload("history", [history_row(delivered_at="")])], actor=actor)
+    batch = stage_upload(kind="history", source_name="missing-time", files=[upload("history", [history_row(ordered_at="", delivered_at="", returned_at="", refunded_at="", collected_at="", settled_at="")])], actor=actor)
     checked = validate_batch(batch.id)
-    assert checked.status == "failed"
-    assert "delivered_at" in checked.errors[0]["message"]
-    assert Order.objects.count() == 0
+    assert checked.status == "ready", checked.errors
+    assert commit_batch(batch.id).status == "completed"
+    order = Order.objects.get()
+    assert order.created_at is None and order.confirmed_at is None and order.delivered_at is None
+    assert order.lines.get().delivered_at is None and order.lines.get().returned_at is None
+    assert order.shipments.get().dispatched_at is None
+    assert order.returns.get().status == "inspected" and order.returns.get().inspected_at is None
+    assert order.refunds.get().confirmed_at is None
+    assert order.payments.get().collected_at is None
+    assert order.payments.get().created_at is not None  # ingestion provenance, not invented collection time
+    assert PaymentSettlement.objects.get().settled_at is None
+    assert StockMovement.objects.count() == 0
 
 
 def test_related_history_csv_batch_and_repeat(import_data, settings, tmp_path):
@@ -249,3 +258,200 @@ def test_opening_stock_cannot_reset_sku_with_live_order_history(import_data, set
     assert result.status == "failed"
     sku.refresh_from_db()
     assert sku.on_hand == 0
+
+
+def test_canonical_history_repeat_ignores_decimal_spelling_and_timezone_offsets(import_data, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    _, actor = import_data
+    first = stage_upload(kind="history", source_name="canonical", files=[upload("history", [history_row()])], actor=actor)
+    assert validate_batch(first.id).status == "ready"
+    assert commit_batch(first.id).status == "completed"
+    changed_spelling = history_row(unit_price="100.0", ordered_at="2026-01-01T06:00:00Z", delivered_at="2026-01-03T06:00:00+00:00",
+                                   returned_at="2026-01-05T06:00:00Z", refunded_at="2026-01-06T06:00:00Z", collected_at="2026-01-03T06:00:00Z",
+                                   settled_at="2026-01-04T06:00:00Z", collected_amount="200.0")
+    second = stage_upload(kind="history", source_name="canonical", files=[upload("history", [changed_spelling])], actor=actor)
+    assert validate_batch(second.id).status == "ready"
+    assert commit_batch(second.id).result["skipped"] == 1
+    assert Order.objects.count() == 1
+
+
+def test_related_repeat_ignores_file_and_line_order(import_data, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    _, actor = import_data
+    first = stage_upload(kind="history", source_name="reordered", files=related_files(), actor=actor)
+    assert validate_batch(first.id).status == "ready"
+    assert commit_batch(first.id).status == "completed"
+    reversed_files = []
+    for file in reversed(related_files()):
+        reader = csv.DictReader(io.StringIO(file.read().decode()))
+        rows = list(reader)
+        stream = io.StringIO()
+        writer = csv.DictWriter(stream, fieldnames=reader.fieldnames)
+        writer.writeheader()
+        writer.writerows(reversed(rows))
+        reversed_files.append(SimpleUploadedFile(file.name, stream.getvalue().encode(), content_type="text/csv"))
+    second = stage_upload(kind="history", source_name="reordered", files=reversed_files, actor=actor)
+    checked = validate_batch(second.id)
+    assert checked.status == "ready", checked.errors
+    assert commit_batch(second.id).result["skipped"] == 2
+    assert Order.objects.count() == 1
+
+
+def test_changed_history_identity_fails_without_changing_existing_totals(import_data, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    sku, actor = import_data
+    first = stage_upload(kind="history", source_name="conflicting", files=[upload("history", [history_row()])], actor=actor)
+    assert validate_batch(first.id).status == "ready"
+    assert commit_batch(first.id).status == "completed"
+    original = Order.objects.get()
+    fingerprint = original.import_fingerprint
+    conflict = stage_upload(kind="history", source_name="conflicting", files=[upload("history", [history_row(unit_price="110.00")])], actor=actor)
+    checked = validate_batch(conflict.id)
+    assert checked.status == "failed"
+    assert checked.errors[0]["code"] == "source_conflict"
+    assert "conflicting data" in checked.errors[0]["message"]
+    original.refresh_from_db()
+    assert original.grand_total == 200 and original.import_fingerprint == fingerprint
+    assert Order.objects.count() == Payment.objects.count() == PaymentSettlement.objects.count() == 1
+    sku.refresh_from_db()
+    assert sku.on_hand == 100
+
+
+@pytest.mark.parametrize("kind", ["opening_stock", "adjustments"])
+def test_stock_repeat_and_changed_identity_include_quantity_and_reason(import_data, settings, tmp_path, kind):
+    settings.MEDIA_ROOT = tmp_path
+    sku, actor = import_data
+    if kind == "opening_stock":
+        sku.on_hand = 0
+        sku.save(update_fields=["on_hand"])
+        row = {"source_record_id": "RECORD", "sku": sku.code, "quantity": "5"}
+        changed = {**row, "quantity": "6"}
+    else:
+        row = {"source_record_id": "RECORD", "sku": sku.code, "quantity_delta": "5", "reason": "Verified physical count"}
+        changed = {**row, "reason": "A different justification"}
+    initial_stock = sku.on_hand
+    for attempt in range(2):
+        batch = stage_upload(kind=kind, source_name="stock-identity", files=[upload(kind, [row])], actor=actor)
+        assert validate_batch(batch.id).status == "ready"
+        result = commit_batch(batch.id)
+        assert result.status == "completed"
+        assert result.result["created" if attempt == 0 else "skipped"] == 1
+    conflict = stage_upload(kind=kind, source_name="stock-identity", files=[upload(kind, [changed])], actor=actor)
+    assert validate_batch(conflict.id).status == "failed"
+    sku.refresh_from_db()
+    assert sku.on_hand == initial_stock + 5
+    assert StockMovement.objects.count() == 1
+
+
+def test_stock_identity_cannot_silently_move_to_another_sku(import_data, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    sku, actor = import_data
+    other = SKU.objects.create(product=sku.product, code="IMPORT-OTHER", price=25, on_hand=10)
+    row = {"source_record_id": "SAME-ID", "sku": sku.code, "quantity_delta": "5", "reason": "Physical count"}
+    first = stage_upload(kind="adjustments", source_name="identity-sku", files=[upload("adjustments", [row])], actor=actor)
+    assert validate_batch(first.id).status == "ready"
+    assert commit_batch(first.id).status == "completed"
+    conflict = stage_upload(kind="adjustments", source_name="identity-sku", files=[upload("adjustments", [{**row, "sku": other.code}])], actor=actor)
+    checked = validate_batch(conflict.id)
+    assert checked.status == "failed" and checked.errors[0]["code"] == "source_conflict"
+    other.refresh_from_db()
+    assert other.on_hand == 10
+
+
+def test_legacy_identity_without_fingerprint_is_unverifiable(import_data, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    _, actor = import_data
+    first = correction_batch(actor, history_row(), source="unverifiable")
+    assert commit_batch(first.id).status == "completed"
+    Order.objects.update(import_fingerprint="")  # simulate records imported before canonical provenance existed
+    repeated = correction_batch(actor, history_row(), source="unverifiable")
+    repeated.refresh_from_db()
+    assert repeated.status == "failed" and "unverifiable" in repeated.errors[0]["message"]
+    assert Order.objects.count() == 1
+
+
+def correction_batch(actor, row, source="reviewed"):
+    batch = stage_upload(kind="history", source_name=source, files=[upload("history", [row])], actor=actor)
+    validate_batch(batch.id)
+    return batch
+
+
+def test_reviewed_historical_revision_preserves_old_ledger_and_replaces_reporting(import_data, settings, tmp_path):
+    from commerce.reporting import analytics, filters_from_params
+    settings.MEDIA_ROOT = tmp_path
+    sku, actor = import_data
+    first = correction_batch(actor, history_row())
+    assert commit_batch(first.id).status == "completed"
+    old = Order.objects.get()
+    old_payment_id = old.payments.get().id
+    old_settlement_id = old.payments.get().settlements.get().id
+    changed = correction_batch(actor, history_row(unit_price="150", collected_amount="300", settled_amount="300", refund_amount="150"))
+    client = APIClient()
+    client.force_authenticate(actor)
+    preview = client.get(f"/api/v1/imports/{changed.id}/correction-preview/")
+    assert preview.status_code == 200
+    proposed = preview.json()
+    assert proposed["can_correct"] and proposed["conflicts_count"] == 1
+    assert proposed["orders"][0]["before"]["grand_total"] == "200.00"
+    assert proposed["orders"][0]["after"]["grand_total"] == "300.00"
+    approved = client.post(f"/api/v1/imports/{changed.id}/correct/", {"reason": "Administrator reconciled the corrected source export", "expected_revisions": proposed["expected_revisions"]}, format="json")
+    assert approved.status_code == 202, approved.json()
+    result = commit_batch(changed.id)
+    assert result.status == "completed", result.errors
+    assert result.result["revised"] == 1
+    old.refresh_from_db()
+    current = Order.objects.get(is_current=True)
+    assert old.is_current is False and current.supersedes_id == old.id
+    assert Payment.objects.get(pk=old_payment_id).amount == 200
+    assert PaymentSettlement.objects.get(pk=old_settlement_id).amount == 200
+    assert Order.objects.count() == PaymentSettlement.objects.count() == 2
+    assert AuditEvent.objects.filter(event="historical_order_corrected").count() == 1
+    report = analytics(filters_from_params({"start": "2026-01-01", "end": "2026-01-31"}))
+    assert report["summary"]["orders"] == 1
+    assert report["summary"]["ordered_value"] == "300.00"
+    assert report["cash"]["collected_amount"] == "300.00"
+    assert report["cash"]["settled_amount"] == "300.00"
+    sku.refresh_from_db()
+    assert sku.on_hand == 100 and sku.reserved == 0
+
+
+def test_reviewed_revision_rechecks_stale_expected_identity_in_worker(import_data, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    _, actor = import_data
+    assert commit_batch(correction_batch(actor, history_row()).id).status == "completed"
+    first = correction_batch(actor, history_row(unit_price="110"))
+    second = correction_batch(actor, history_row(unit_price="120"))
+    client = APIClient()
+    client.force_authenticate(actor)
+    for batch in (first, second):
+        preview = client.get(f"/api/v1/imports/{batch.id}/correction-preview/").json()
+        assert client.post(f"/api/v1/imports/{batch.id}/correct/", {"reason": "Reviewed source correction for stale identity proof", "expected_revisions": preview["expected_revisions"]}, format="json").status_code == 202
+    assert commit_batch(second.id).status == "completed"
+    rejected = commit_batch(first.id)
+    assert rejected.status == "failed" and "stale" in rejected.errors[0]["message"]
+    assert Order.objects.count() == 2
+    assert Order.objects.get(is_current=True).grand_total == 240
+
+
+@pytest.mark.parametrize("role", ["customer", "operator", "analyst"])
+def test_historical_correction_requires_administrator(import_data, settings, tmp_path, role):
+    settings.MEDIA_ROOT = tmp_path
+    _, actor = import_data
+    batch = correction_batch(actor, history_row())
+    user = get_user_model().objects.create_user(username="review-" + role, role=role, is_staff=True)
+    client = APIClient()
+    client.force_authenticate(user)
+    assert client.get(f"/api/v1/imports/{batch.id}/correction-preview/").status_code == 403
+    assert client.post(f"/api/v1/imports/{batch.id}/correct/", {"reason": "Cannot approve without administrator role", "expected_revisions": {}}, format="json").status_code == 403
+
+
+def test_live_order_cannot_be_revised_as_history(import_data, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    _, actor = import_data
+    Order.objects.create(number="LIVE", source="csv:reviewed", external_id="OLD-1", is_historical=False, customer_name="Synthetic", email="", phone="")
+    batch = correction_batch(actor, history_row())
+    client = APIClient()
+    client.force_authenticate(actor)
+    preview = client.get(f"/api/v1/imports/{batch.id}/correction-preview/")
+    assert preview.status_code == 400 and "live orders" in str(preview.json())
+    assert Order.objects.count() == 1 and Order.objects.get().is_current is True

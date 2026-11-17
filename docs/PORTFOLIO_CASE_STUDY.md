@@ -20,12 +20,28 @@ The PostgreSQL demonstration contains 25,000 synthetic historical orders and 75,
 
 A high return rate suggests a product or fulfilment issue worth investigating; it does not prove its cause. Immature cohorts and small denominators require care. The demonstration cannot support claims about a real company's customers or commercial performance.
 
+## Worked merchandise and cash example
+
+The hand-calculated reporting fixture records three units at BDT 100 each with a BDT 30 line discount: `3 × 100 − 30 = 270`, or **BDT 90 per unit**. One unit is delivered on 31 January and two on 2 February. One returned unit is accepted at inspection on 10 February; its BDT 90 refund is confirmed on 11 February.
+
+| Event date | Delivered merchandise | Accepted returned merchandise | Net delivered activity | Confirmed cash refund |
+|---|---:|---:|---:|---:|
+| 31 January | BDT 90 | BDT 0 | BDT 90 | BDT 0 |
+| 2 February | BDT 180 | BDT 0 | BDT 180 | BDT 0 |
+| 10 February | BDT 0 | BDT 90 | BDT −90 | BDT 0 |
+| 11 February | BDT 0 | BDT 0 | BDT 0 | BDT 90 |
+
+Across these events, retained merchandise is `270 − 90 = BDT 180`. The later cash refund does not reduce merchandise value a second time. The inspection-day regression keeps the refund pending and still expects net activity of BDT −90; confirming that refund later changes the cash measure without creating another merchandise loss.
+
+A separate allocation assertion records a BDT 109 cash refund containing BDT 90 merchandise, BDT 9 tax and BDT 10 shipping. The product's merchandise-refund measure is BDT 90, while the company cash-refund measure is BDT 109. These are synthetic accounting examples in the [reporting tests](../backend/tests/test_reporting.py), not external payments or accounting-revenue claims.
+
 ## Engineering decisions
 
 - Use one transactional backend and database to keep stock and money transitions coherent.
 - Reserve stock under database locks and bind checkout retries to their original request/session.
 - Preserve order-line prices, discounts and tax snapshots instead of joining today's catalogue prices into historical calculations.
 - Group shared imported shipment/return/refund identities before counting outcomes.
+- Preserve unknown source dates and show their coverage separately from dated activity. Reviewed historical corrections create a current revision while retaining the original records and immutable settlement events.
 - Keep queued work in a durable database outbox, with bounded retries and dead-worker recovery.
 - Define metrics once and reuse them for the dashboard, drill-down and CSV exports.
 - Use an explicit private/public-media boundary and backend role permissions.
@@ -34,4 +50,4 @@ A high return rate suggests a product or fulfilment issue worth investigating; i
 
 The test suite includes real PostgreSQL checkout contention, authorization, partial-return/refund accounting and exact report fixtures. Browser tests follow a purchase through COD delivery, settlement, a partial return and refund, then verify the product measures. Real-worker tests demonstrate an identical import being skipped and a queued batch completing after worker restart. Encrypted backup restoration verifies database totals and private-file checksums.
 
-Measured results, benchmark conditions and unresolved external release prerequisites are maintained in [VALIDATION.md](VALIDATION.md). Hosted deployment and actual merchant gateway transactions require their own evidence.
+Measured results, benchmark conditions and unresolved external release prerequisites are maintained in [VALIDATION.md](VALIDATION.md). The latest two-minute candidate completed 2,452 valid requests without errors, but analytics p95 of 2,348.54 ms missed the unchanged 2,000 ms target; profiling and retesting remain part of release work. Hosted deployment and actual merchant gateway transactions require their own evidence.

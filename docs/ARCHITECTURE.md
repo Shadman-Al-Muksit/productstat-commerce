@@ -27,6 +27,8 @@ erDiagram
   SKU ||--o{ ORDER_LINE : identifies
   ORDER ||--|{ ORDER_LINE : contains
   ORDER ||--o{ PAYMENT : records
+  PAYMENT ||--o{ PAYMENT_SETTLEMENT : settles_in_increments
+  ORDER o|--o{ ORDER : supersedes_historical_revision
   ORDER ||--o{ SHIPMENT : fulfils
   SHIPMENT ||--|{ SHIPMENT_LINE : contains
   ORDER_LINE ||--o{ SHIPMENT_LINE : allocates
@@ -41,6 +43,8 @@ erDiagram
 Product and SKU changes do not rewrite historical order snapshots. `on_hand − reserved` is available stock. Checkout locks inventory; dispatch consumes reservations; cancellation releases them; inspected returns create separate stock movements. A refund is a money record, independent of physical receipt.
 
 Live checkout supports one shipment. Historical migration can retain external event identities from related CSV files. Historical observations feed supported reports but never replay live operations.
+
+Historical source identities permit one current revision. An administrator-approved correction preserves the previous order and its immutable payment, settlement and event records, then creates a linked replacement. Reporting uses current revisions; audit records retain the reviewer, reason and previous/new identifiers. Unknown historical dates remain NULL, with coverage reported separately from dated metrics. This does not change live inventory or replay customer operations.
 
 ## Decisions
 

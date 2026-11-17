@@ -6,13 +6,16 @@ All reports use Asia/Dhaka calendar boundaries. `start` and `end` are inclusive 
 |---|---|
 | Orders | Distinct orders with selected lines, placed during the interval. Includes subsequently cancelled orders. |
 | Ordered units / value | Original line quantity / merchandise value after line discounts, on order creation date. Includes cancelled units; this measures demand, not completed sales. |
+| Cancelled units | Exact released reservation quantities from timestamped cancellation/expiry stock movements, on each movement date. Partial cancellations retain separate dates. Historical cumulative snapshots without dated release events are excluded and disclosed in coverage. |
 | Delivered units / value | Quantities on delivered shipment events / allocated net line price × quantity, on actual delivery date. Split shipments remain separate events. |
 | Returned units | Accepted quantities from inspected returns, on inspection date. Requested or rejected returns are excluded. |
+| Returned value | Saved discounted merchandise unit value × accepted return quantity, on inspection date. It does not wait for a cash refund. |
 | Refunded amount | Confirmed refund-line cash amounts minus their tax/shipping allocations, on confirmation date. Pending refunds are excluded. Each refund has exact line allocations. |
-| Net delivered value | Delivered merchandise value minus confirmed merchandise refund allocations occurring in the interval. Refunds can concern older deliveries; a negative interval is valid. |
+| Net delivered value | Delivered merchandise value minus accepted returned merchandise value occurring in the interval. Pending, completed or absent cash refunds never subtract again. Returns can concern older deliveries; a negative interval is valid. |
 | Delivery success | Delivered shipments / (delivered + failed + returned-to-origin shipments), using each shipment's terminal date. Pending shipments are excluded. A shipment containing multiple selected products is counted once. |
 | Collections | Verified successful and exception payment receipts, on collection date. COD and online collection are separate. Includes shipping/tax. Exception receipts are separately exposed as refund obligations; sandbox receipts are separately identified. |
 | Settlement | Sum of immutable individual `PaymentSettlement.amount` events on each event's settlement date. Collection and settlement are different events. A payment's cumulative `settled_amount` is a compatibility balance, never the period measure. |
+| Cash refunds | Company-wide full confirmed `Refund.amount` on its confirmation date, including allocated tax/shipping. Exposed as `cash.refunded_amount`; the compatible headline `summary.refunded_amount` remains merchandise-only. |
 
 Collections and settlements are **company-wide**, even when merchandise reports filter products. An order-level cash payment includes delivery charges and cannot honestly be assigned to one SKU without a separately documented allocation. The API explicitly returns `cash.scope = company` and `product_filter_applied = false`.
 
@@ -24,13 +27,15 @@ The denominator is units delivered during the selected interval. The numerator i
 
 When the same order line has split deliveries and the return does not identify a shipment, accepted returns allocate to eligible earlier deliveries first (FIFO). A return cannot allocate to a delivery after the return event. The reference test includes a January/February split delivery and a February return attributed to January's delivery cohort.
 
-`open_window_units` counts cohort deliveries still within the configured return window; `preliminary` is true while any remain. This is a maturity indicator, not a guarantee that no late exception return will be accepted. A zero denominator produces `null`, not a misleading 0% rate.
+`open_window_units` counts cohort deliveries still within the configured return window. `unresolved_cases` counts distinct requested, approved or received return requests linked to order lines delivered in the selected cohort, after product filtering. A case spanning multiple selected lines counts once. Because return requests link to order lines rather than a particular split shipment, a case linked to a line with a cohort delivery is treated as unresolved for that cohort. `preliminary` stays true while any window remains open **or** any such case is unresolved. This is a maturity indicator, not a guarantee that no late exception return will be accepted. A zero denominator produces `null`, not a misleading 0% rate.
+
+`return_reasons` groups accepted inspected quantities by the saved reason, on inspection date. `count` is distinct return requests, so a multi-line case counts once. Product filters apply to contributing lines. Rejected/unaccepted cases are excluded. Snapshot-only legacy returns with a known date but no original case are explicitly labelled unknown with a `null` case count; no request count is invented.
 
 ## Comparison, drill-down and limitations
 
 The previous comparison interval contains the same number of calendar days immediately before the selected interval. Percent change is `null` when the previous value is zero. Trend buckets contain every day, including zero-activity days.
 
-Drill-down and CSV export use the same selection function. They contain order references and merchandise facts, and exclude customer names, email, phone and addresses. For `metric=orders`, rows represent contributing order lines; the headline order total is the distinct order count, not the row count. CSV values are protected against spreadsheet formula injection.
+Drill-down and CSV export use the same selection function. They contain order references and merchandise facts, and exclude customer names, email, phone and addresses. For `metric=orders`, rows represent contributing order lines; the headline order total is the distinct order count, not the row count. Cancellation rows identify the exact stock movement and saved order-line unit value; if an unsupported orphaned record has no saved line, its value is explicitly null rather than invented. CSV values are protected against spreadsheet formula injection.
 
 Merchandise values exclude shipping and tax. They are operational sales measures, **not accounting revenue or profit**. No profit metric is published because warehouse, courier, marketing, tax and other costs are not comprehensively modelled. Sandbox/demo collections are synthetic and do not represent money received.
 
@@ -39,3 +44,11 @@ New live operations, normalized CSV imports and the full seed create shipment/re
 Dashboard SQL groups the same event stream into headline, day and product totals in PostgreSQL without loading the full transactional dataset into the web process. HTTP overviews share a Redis cache for up to 30 seconds, keyed by canonical filters and committed audit/import revisions. Every supported business write appends an audit event inside its database transaction; an append-count revision also detects an older transaction committing after a newer timestamp. A committed write therefore causes the next overview to calculate fresh totals. Direct SQL/ORM maintenance must append its audit event too; fresh demo seeding does so automatically.
 
 Cached responses retain the original visible `meta.generated_at` and cohort `as_of`; they do not claim to have been calculated again. A bounded Redis lock reduces duplicate work for simultaneous readers. Redis failures fall back to fresh database calculations, and browsers/proxies receive `private, no-store` so they cannot bypass revision checks. Drill-down, CSV export and the analytical function itself remain uncached. The hand-calculated reference and cache tests verify cross-month split deliveries, subsequent returns, exact discounts, tax/shipping refund exclusion, CSV reconciliation, and immediate refresh after checkout, return, refund and historical import commits.
+
+The protected `/api/v1/analytics/variants/` endpoint applies the same activity dates and money definitions to one product's SKU UUIDs. It includes inactive and zero-activity variants, keeps historical performance attached when a SKU code is renamed, and excludes customer data. Variant tests reconcile delivered/accepted-return quantities and merchandise values with the product report across multiple variants and partial returns.
+
+## Undated data and reviewed historical revisions
+
+Unknown historical dates stay unknown. `coverage` describes **all matching current history, not the selected interval**, because an unknown date cannot be assigned to a month. It reports missing order/delivery/return-date units, cancelled units lacking dated cancellation events, and undated collection/settlement amounts. Unit coverage follows product filters; monetary coverage stays company-wide like cash totals. Known shipment/inspection event quantities prevent a missing line-level timestamp from being counted twice. Remaining undated quantities stay outside dated activity, rather than receiving fabricated dates.
+
+Reviewed historical corrections retain the original order and all its money/event records. Reports, drill-downs, cash totals, delivery cohorts, reason groups and coverage include only `Order.is_current=True`. The administrator-approved replacement is linked through `supersedes`; old immutable financial rows are retained as evidence and never double-counted in reports. Live orders remain current. A correction's transactional audit append invalidates the overview cache immediately.

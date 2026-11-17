@@ -1,11 +1,13 @@
 from django.urls import path
 from . import views
 from .schema import annotate_core
+from .monitoring_views import operations_health_view
 
 annotate_core(views)
 
 urlpatterns=[
     path('health/',views.health),path('bootstrap/',views.bootstrap),
+    path('staff/operations-health/',operations_health_view),
     path('auth/register/',views.register),path('auth/login/',views.login_view),path('auth/logout/',views.logout_view),
     path('catalog/products/',views.catalog),path('catalog/products/<slug:slug>/',views.catalog_detail),
     path('cart/',views.cart),path('checkout/',views.checkout),path('orders/',views.orders),path('orders/<uuid:pk>/',views.order_detail),path('orders/<uuid:pk>/cancel/',views.cancel_order),path('orders/<uuid:pk>/returns/',views.request_return),

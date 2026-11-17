@@ -52,8 +52,9 @@ CELERY_BROKER_URL = os.getenv('REDIS_URL','redis://127.0.0.1:6379/0')
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 _reporting_redis = urlsplit(CELERY_BROKER_URL)
 REPORTING_REDIS_URL = os.getenv('REPORTING_REDIS_URL',urlunsplit((_reporting_redis.scheme,_reporting_redis.netloc,'/1',_reporting_redis.query,_reporting_redis.fragment)))
+THROTTLE_REDIS_URL = os.getenv('THROTTLE_REDIS_URL',urlunsplit((_reporting_redis.scheme,_reporting_redis.netloc,'/2',_reporting_redis.query,_reporting_redis.fragment)))
 CACHES = {
-    'default': {'BACKEND':'django.core.cache.backends.locmem.LocMemCache','LOCATION':'productstat-throttles'},
+    'default': {'BACKEND':'django.core.cache.backends.redis.RedisCache','LOCATION':THROTTLE_REDIS_URL,'KEY_PREFIX':'productstat-throttle-v1','TIMEOUT':3600,'OPTIONS':{'socket_connect_timeout':0.5,'socket_timeout':0.5}},
     'reporting': {'BACKEND':'django.core.cache.backends.redis.RedisCache','LOCATION':REPORTING_REDIS_URL,'KEY_PREFIX':'productstat-reporting-v1','TIMEOUT':30,'OPTIONS':{'socket_connect_timeout':0.5,'socket_timeout':0.5}},
 }
 CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER','0') == '1'

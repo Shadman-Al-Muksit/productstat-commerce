@@ -76,7 +76,7 @@ class Order(models.Model):
     shipping_total = models.DecimalField(max_digits=14, decimal_places=2, default=ZERO)
     tax_total = models.DecimalField(max_digits=14, decimal_places=2, default=ZERO)
     grand_total = models.DecimalField(max_digits=14, decimal_places=2, default=ZERO)
-    created_at = models.DateTimeField(default=__import__('django.utils.timezone',fromlist=['now']).now, db_index=True)
+    created_at = models.DateTimeField(default=__import__('django.utils.timezone',fromlist=['now']).now, db_index=True, null=True, blank=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
     prepared_at = models.DateTimeField(null=True, blank=True)
     dispatched_at = models.DateTimeField(null=True, blank=True)
@@ -86,11 +86,14 @@ class Order(models.Model):
     source = models.CharField(max_length=100, default='live')
     external_id = models.CharField(max_length=150, null=True, blank=True)
     is_historical = models.BooleanField(default=False)
+    is_current = models.BooleanField(default=True, db_index=True)
+    supersedes = models.ForeignKey('self',null=True,blank=True,on_delete=models.PROTECT,related_name='revisions')
     guest_token_hash = models.CharField(max_length=64, blank=True)
     idempotency_key = models.CharField(max_length=100, null=True, blank=True, unique=True)
     checkout_fingerprint = models.CharField(max_length=64, blank=True)
+    import_fingerprint = models.CharField(max_length=64, blank=True, default='')
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['source','external_id'],name='unique_external_order'),models.CheckConstraint(condition=Q(subtotal__gte=0,discount_total__gte=0,shipping_total__gte=0,tax_total__gte=0,grand_total__gte=0)&Q(discount_total__lte=F('subtotal')),name='order_nonnegative_amounts')]
+        constraints = [models.UniqueConstraint(fields=['source','external_id'],condition=Q(is_current=True),name='unique_current_external_order'),models.CheckConstraint(condition=Q(subtotal__gte=0,discount_total__gte=0,shipping_total__gte=0,tax_total__gte=0,grand_total__gte=0)&Q(discount_total__lte=F('subtotal')),name='order_nonnegative_amounts'),models.CheckConstraint(condition=Q(is_historical=True)|Q(is_current=True),name='live_order_must_remain_current'),models.CheckConstraint(condition=Q(is_historical=True)|Q(created_at__isnull=False),name='live_order_requires_created_at')]
 
 class OrderLine(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -122,7 +125,7 @@ class Shipment(models.Model):
     state = models.CharField(max_length=30, default='dispatched')
     tracking_number = models.CharField(max_length=120, blank=True)
     carrier = models.CharField(max_length=100, blank=True)
-    dispatched_at = models.DateTimeField()
+    dispatched_at = models.DateTimeField(null=True,blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -168,7 +171,7 @@ class PaymentSettlement(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     objects = SettlementQuerySet.as_manager()
     class Meta:
-        constraints = [models.CheckConstraint(condition=Q(amount__gt=0),name='settlement_positive_amount'),models.UniqueConstraint(fields=['payment','reference'],name='settlement_payment_reference_unique'),models.CheckConstraint(condition=Q(settled_at__isnull=False)|Q(source='legacy_aggregate'),name='settlement_observed_date_required')]
+        constraints = [models.CheckConstraint(condition=Q(amount__gt=0),name='settlement_positive_amount'),models.UniqueConstraint(fields=['payment','reference'],name='settlement_payment_reference_unique'),models.CheckConstraint(condition=Q(settled_at__isnull=False)|Q(source__in=['legacy_aggregate','import']),name='settlement_observed_date_required')]
     def save(self,*args,**kwargs):
         if not self._state.adding:
             raise ModelValidationError('Settlement events are immutable.')
@@ -216,6 +219,7 @@ class StockMovement(models.Model):
     reserved_delta = models.IntegerField(default=0)
     kind = models.CharField(max_length=40)
     reference = models.CharField(max_length=200)
+    import_fingerprint = models.CharField(max_length=64, blank=True, default='')
     actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
 

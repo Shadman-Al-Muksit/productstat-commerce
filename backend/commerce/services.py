@@ -5,6 +5,7 @@ import json
 import secrets
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.db import connection, transaction
 from django.db.models import Sum
@@ -295,7 +296,9 @@ def request_return(order_id,data,actor=None):
     order=Order.objects.select_for_update().get(pk=order_id);ensure_live(order)
     if order.status!='delivered' or not order.delivered_at: raise ValidationError('Only delivered merchandise can be returned.')
     company,_=CompanySettings.objects.get_or_create(pk=1)
-    if timezone.now()>order.delivered_at+timedelta(days=company.return_window_days): raise ValidationError('The return-request window has closed. Contact support for exceptions.')
+    business_tz=ZoneInfo('Asia/Dhaka')
+    last_return_date=timezone.localdate(order.delivered_at,business_tz)+timedelta(days=company.return_window_days)
+    if timezone.localdate(timezone.now(),business_tz)>last_return_date: raise ValidationError('The return-request window has closed. Contact support for exceptions.')
     if not str(data.get('reason','')).strip(): raise ValidationError('A return reason is required.')
     entries=data.get('lines')
     if not isinstance(entries,list) or not entries: raise ValidationError('Choose at least one return line.')

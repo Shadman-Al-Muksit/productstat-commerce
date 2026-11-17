@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/variants/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["analytics_variants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login/": {
         parameters: {
             query?: never;
@@ -244,6 +260,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/{batch_id}/correct/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["imports_correct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/correction-preview/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["imports_correction_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/templates/": {
         parameters: {
             query?: never;
@@ -404,6 +452,23 @@ export interface paths {
         get: operations["staff_inventory_get"];
         put?: never;
         post: operations["staff_inventory_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/operations-health/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Uncached, redacted attention signals. Attention still returns HTTP200; the management check exits nonzero for monitors. */
+        get: operations["staff_operations_health_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -622,6 +687,8 @@ export interface components {
             trend: components["schemas"]["ReportingTrend"][];
             products: components["schemas"]["ReportingProduct"][];
             meta: components["schemas"]["ReportingMeta"];
+            return_reasons: components["schemas"]["ReturnReason"][];
+            coverage: components["schemas"]["ReportingCoverage"];
         };
         Audit: {
             /** Format: uuid */
@@ -757,6 +824,45 @@ export interface components {
             tax_rate?: string;
             delivery_zones?: components["schemas"]["Zone"][];
         };
+        CorrectionInput: {
+            reason: string;
+            expected_revisions: {
+                [key: string]: components["schemas"]["ExpectedRevision"];
+            };
+        };
+        CorrectionOrder: {
+            external_id: string;
+            action: components["schemas"]["CorrectionOrderActionEnum"];
+            /** Format: uuid */
+            current_order_id: string | null;
+            before_fingerprint: string | null;
+            after_fingerprint: string;
+            before: components["schemas"]["CorrectionSummary"] | null;
+            after: components["schemas"]["CorrectionSummary"];
+        };
+        /**
+         * @description * `create` - create
+         *     * `skip` - skip
+         *     * `revise` - revise
+         * @enum {string}
+         */
+        CorrectionOrderActionEnum: "create" | "skip" | "revise";
+        CorrectionPreview: {
+            /** Format: uuid */
+            batch_id: string;
+            source_name: string;
+            can_correct: boolean;
+            orders: components["schemas"]["CorrectionOrder"][];
+            expected_revisions: {
+                [key: string]: components["schemas"]["ExpectedRevision"];
+            };
+            conflicts_count: number;
+        };
+        CorrectionSummary: {
+            line_count: number;
+            units: number;
+            grand_total: string;
+        };
         /**
          * @description * `restock` - restock
          *     * `quarantine` - quarantine
@@ -779,11 +885,30 @@ export interface components {
             product_name: string;
             sku: string;
             quantity: number | null;
-            value: string;
+            value: string | null;
             /** Format: date-time */
             event_at: string;
             status: string;
             source: string;
+        };
+        ExhaustedOutbox: {
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            attempts: number;
+        };
+        ExpectedRevision: {
+            /** Format: uuid */
+            order_id: string;
+            fingerprint: string;
+        };
+        FailedImport: {
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
         };
         Health: {
             status: string;
@@ -832,6 +957,23 @@ export interface components {
             username: string;
             password: string;
         };
+        OperationsCounts: {
+            overdue_cod_orders: number;
+            failed_outbox_jobs: number;
+            failed_imports: number;
+            payment_exceptions: number;
+        };
+        OperationsHealth: {
+            status: components["schemas"]["StatusEnum"];
+            /** Format: date-time */
+            checked_at: string;
+            counts: components["schemas"]["OperationsCounts"];
+            overdue_cod_orders: components["schemas"]["OverdueCOD"][];
+            failed_outbox_jobs: components["schemas"]["ExhaustedOutbox"][];
+            failed_imports: components["schemas"]["FailedImport"][];
+            payment_exceptions: components["schemas"]["PaymentException"][];
+            sample_limit: number;
+        };
         Order: {
             /** Format: uuid */
             id: string;
@@ -857,7 +999,7 @@ export interface components {
             /** Format: decimal */
             refunded_total: string;
             /** Format: date-time */
-            created_at: string;
+            created_at: string | null;
             /** Format: date-time */
             confirmed_at: string | null;
             /** Format: date-time */
@@ -867,6 +1009,9 @@ export interface components {
             /** Format: date-time */
             reservation_expires_at: string | null;
             is_historical: boolean;
+            is_current: boolean;
+            /** Format: uuid */
+            supersedes_id: string | null;
             source: string;
             lines: components["schemas"]["OrderLine"][];
             shipments: components["schemas"]["Shipment"][];
@@ -924,6 +1069,18 @@ export interface components {
             page: number;
             page_size: number;
             results: components["schemas"]["Order"][];
+        };
+        OverdueCOD: {
+            /** Format: uuid */
+            id: string;
+            number: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            confirmed_at: string | null;
+            /** Format: double */
+            age_hours: number;
         };
         PatchedCompany: {
             name?: string;
@@ -986,6 +1143,13 @@ export interface components {
             cod: boolean;
             sslcommerz_enabled: boolean;
             sandbox: boolean;
+        };
+        PaymentException: {
+            /** Format: uuid */
+            id: string;
+            number: string;
+            /** Format: decimal */
+            unreconciled_amount: string;
         };
         /**
          * @description * `cod` - cod
@@ -1074,6 +1238,7 @@ export interface components {
             cod_collected_amount: string;
             online_collected_amount: string;
             settled_amount: string;
+            refunded_amount: string;
             exception_collected_amount: string;
             sandbox_collected_amount: string;
             basis: string;
@@ -1084,6 +1249,7 @@ export interface components {
             /** Format: double */
             return_rate: number | null;
             open_window_units: number;
+            unresolved_cases: number;
             preliminary: boolean;
             /** Format: date-time */
             as_of: string;
@@ -1098,6 +1264,15 @@ export interface components {
             change_percent: {
                 [key: string]: number | null;
             };
+        };
+        ReportingCoverage: {
+            missing_order_date_units: number;
+            missing_delivery_date_units: number;
+            missing_return_date_units: number;
+            cancelled_units_without_dated_event: number;
+            undated_collection_amount: string;
+            undated_settlement_amount: string;
+            basis: string;
         };
         ReportingDelivery: {
             delivered_shipments: number;
@@ -1123,14 +1298,17 @@ export interface components {
             customer_data: string;
             basis: string;
             money_basis: string;
+            cancellation_basis: string;
         };
         ReportingProduct: {
             orders: number;
             ordered_units: number;
+            cancelled_units: number;
             ordered_value: string;
             delivered_units: number;
             delivered_value: string;
             returned_units: number;
+            returned_value: string;
             refunded_amount: string;
             net_delivered_value: string;
             /** Format: uuid */
@@ -1142,20 +1320,24 @@ export interface components {
         ReportingSummary: {
             orders: number;
             ordered_units: number;
+            cancelled_units: number;
             ordered_value: string;
             delivered_units: number;
             delivered_value: string;
             returned_units: number;
+            returned_value: string;
             refunded_amount: string;
             net_delivered_value: string;
         };
         ReportingTrend: {
             orders: number;
             ordered_units: number;
+            cancelled_units: number;
             ordered_value: string;
             delivered_units: number;
             delivered_value: string;
             returned_units: number;
+            returned_value: string;
             refunded_amount: string;
             net_delivered_value: string;
             /** Format: date */
@@ -1210,6 +1392,11 @@ export interface components {
             page_size: number;
             results: components["schemas"]["Return"][];
         };
+        ReturnReason: {
+            reason: string;
+            units: number;
+            count: number | null;
+        };
         /**
          * @description * `customer` - customer
          *     * `administrator` - administrator
@@ -1248,10 +1435,16 @@ export interface components {
             carrier: string;
             tracking_number: string;
             /** Format: date-time */
-            dispatched_at: string;
+            dispatched_at: string | null;
             /** Format: date-time */
             delivered_at: string | null;
         };
+        /**
+         * @description * `ok` - ok
+         *     * `attention` - attention
+         * @enum {string}
+         */
+        StatusEnum: "ok" | "attention";
         Upload: {
             kind: components["schemas"]["KindEnum"];
             source_name: string;
@@ -1299,6 +1492,41 @@ export interface components {
         UserList: {
             results: components["schemas"]["User"][];
         };
+        VariantFilters: {
+            /** Format: uuid */
+            product_id: string;
+            /** Format: date */
+            start: string;
+            /** Format: date */
+            end: string;
+            timezone: string;
+            currency: string;
+        };
+        VariantProduct: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        VariantResponse: {
+            product: components["schemas"]["VariantProduct"];
+            filters: components["schemas"]["VariantFilters"];
+            results: components["schemas"]["VariantRow"][];
+        };
+        VariantRow: {
+            /** Format: uuid */
+            sku_id: string;
+            code: string;
+            label: string;
+            is_active: boolean;
+            ordered_units: number;
+            cancelled_units: number;
+            delivered_units: number;
+            returned_units: number;
+            delivered_value: string;
+            returned_value: string;
+            refunded_amount: string;
+            net_delivered_value: string;
+        };
         Zone: {
             id: number;
             name: string;
@@ -1343,7 +1571,7 @@ export interface operations {
         parameters: {
             query?: {
                 end?: string;
-                metric?: "delivered_units" | "ordered_units" | "orders" | "refunds" | "returned_units";
+                metric?: "cancelled_units" | "delivered_units" | "ordered_units" | "orders" | "refunds" | "returned_units";
                 page?: number;
                 page_size?: number;
                 /** @description Comma-separated UUIDs; at most 20. */
@@ -1370,7 +1598,7 @@ export interface operations {
         parameters: {
             query?: {
                 end?: string;
-                metric?: "delivered_units" | "ordered_units" | "orders" | "refunds" | "returned_units";
+                metric?: "cancelled_units" | "delivered_units" | "ordered_units" | "orders" | "refunds" | "returned_units";
                 /** @description Comma-separated UUIDs; at most 20. */
                 product_ids?: string;
                 start?: string;
@@ -1388,6 +1616,29 @@ export interface operations {
                 };
                 content: {
                     "text/csv": string;
+                };
+            };
+        };
+    };
+    analytics_variants: {
+        parameters: {
+            query: {
+                end?: string;
+                product_id: string;
+                start?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VariantResponse"];
                 };
             };
         };
@@ -1737,6 +1988,62 @@ export interface operations {
             };
         };
     };
+    imports_correct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectionInput"];
+                "application/x-www-form-urlencoded": components["schemas"]["CorrectionInput"];
+                "multipart/form-data": components["schemas"]["CorrectionInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Batch"];
+                };
+            };
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Batch"];
+                };
+            };
+        };
+    };
+    imports_correction_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrectionPreview"];
+                };
+            };
+        };
+    };
     imports_template: {
         parameters: {
             query?: {
@@ -2032,6 +2339,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InventoryResult"];
+                };
+            };
+        };
+    };
+    staff_operations_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsHealth"];
                 };
             };
         };

@@ -39,7 +39,7 @@ class CartInput(s.Serializer):
 class OrderLine(s.Serializer):
     id=s.UUIDField();sku_id=s.UUIDField(allow_null=True);sku_code=s.CharField();product_name=s.CharField();variant_name=s.CharField();quantity=s.IntegerField();cancelled_quantity=s.IntegerField();shipped_quantity=s.IntegerField();delivered_quantity=s.IntegerField();returned_quantity=s.IntegerField();unit_price=Money();discount_total=Money();tax_total=Money();line_total=Money()
 class Shipment(s.Serializer):
-    id=s.UUIDField();state=s.CharField();carrier=s.CharField();tracking_number=s.CharField();dispatched_at=s.DateTimeField();delivered_at=s.DateTimeField(allow_null=True)
+    id=s.UUIDField();state=s.CharField();carrier=s.CharField();tracking_number=s.CharField();dispatched_at=s.DateTimeField(allow_null=True);delivered_at=s.DateTimeField(allow_null=True)
 class Payment(s.Serializer):
     id=s.UUIDField();method=s.CharField();status=s.CharField();amount=Money();settled_amount=Money();is_sandbox=s.BooleanField();collected_at=s.DateTimeField(allow_null=True);settled_at=s.DateTimeField(allow_null=True)
 class ReturnLine(s.Serializer):
@@ -49,7 +49,7 @@ class Return(s.Serializer):
 class Refund(s.Serializer):
     id=s.UUIDField();order_id=s.UUIDField();order_number=s.CharField();amount=Money();status=s.CharField();reason=s.CharField();reference=s.CharField();created_at=s.DateTimeField();confirmed_at=s.DateTimeField(allow_null=True)
 class Order(s.Serializer):
-    id=s.UUIDField();number=s.CharField();status=s.CharField();payment_method=s.CharField();customer_name=s.CharField();email=s.CharField();phone=s.CharField();address=Address();subtotal=Money();discount_total=Money();shipping_total=Money();tax_total=Money();grand_total=Money();collected_total=Money();refunded_total=Money();created_at=s.DateTimeField();confirmed_at=s.DateTimeField(allow_null=True);dispatched_at=s.DateTimeField(allow_null=True);delivered_at=s.DateTimeField(allow_null=True);reservation_expires_at=s.DateTimeField(allow_null=True);is_historical=s.BooleanField();source=s.CharField();lines=OrderLine(many=True);shipments=Shipment(many=True);payments=Payment(many=True);returns=Return(many=True);refunds=Refund(many=True)
+    id=s.UUIDField();number=s.CharField();status=s.CharField();payment_method=s.CharField();customer_name=s.CharField();email=s.CharField();phone=s.CharField();address=Address();subtotal=Money();discount_total=Money();shipping_total=Money();tax_total=Money();grand_total=Money();collected_total=Money();refunded_total=Money();created_at=s.DateTimeField(allow_null=True);confirmed_at=s.DateTimeField(allow_null=True);dispatched_at=s.DateTimeField(allow_null=True);delivered_at=s.DateTimeField(allow_null=True);reservation_expires_at=s.DateTimeField(allow_null=True);is_historical=s.BooleanField();is_current=s.BooleanField();supersedes_id=s.UUIDField(allow_null=True);source=s.CharField();lines=OrderLine(many=True);shipments=Shipment(many=True);payments=Payment(many=True);returns=Return(many=True);refunds=Refund(many=True)
     prepared_at=s.DateTimeField(allow_null=True)
 class CheckoutResult(s.Serializer):
     order=Order();access_token=s.CharField();payment_url=s.URLField(allow_null=True)

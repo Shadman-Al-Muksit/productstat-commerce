@@ -40,6 +40,7 @@ import {
   Field,
   SectionTitle,
   DateText,
+  Pagination,
   useDialogFocus,
 } from "./ui";
 type Row = Record<string, any>;
@@ -275,9 +276,9 @@ export function AnalyticsPage() {
               onClick={() => setMetric("returned_units")}
             />
             <MetricCard
-              label="Confirmed refunds"
+              label="Merchandise refunds"
               value={money(s.refunded_amount)}
-              note="Confirmed money events, not obligations"
+              note="Confirmed; excludes tax and shipping"
               onClick={() => setMetric("refunds")}
             />
           </div>
@@ -414,8 +415,26 @@ export function AnalyticsPage() {
                     <strong>{num(s.ordered_units)}</strong>
                   </div>
                   <div className="list-row">
+                    <button
+                      className="text-link"
+                      onClick={() => setMetric("cancelled_units")}
+                    >
+                      Cancelled units · observed events
+                    </button>
+                    <strong>{num(s.cancelled_units)}</strong>
+                  </div>
+                  <div className="list-row">
                     <span>Accepted returns</span>
                     <strong>{num(s.returned_units)}</strong>
+                  </div>
+                  <div className="list-row">
+                    <button
+                      className="text-link"
+                      onClick={() => setMetric("returned_units")}
+                    >
+                      Accepted return merchandise
+                    </button>
+                    <strong>{money(s.returned_value)}</strong>
                   </div>
                   <p className="net-warning">
                     <Info size={14} />
@@ -442,6 +461,7 @@ export function AnalyticsPage() {
                 <span className="badge">{rows.length} products</span>
               </div>
               <ProductPerformance rows={rows} setMetric={setMetric} />
+              <VariantPerformance query={query} />
               {rows.length > 0 && (
                 <section className="panel comparison-chart">
                   <div className="panel-heading">
@@ -539,13 +559,20 @@ export function AnalyticsPage() {
                       <strong>{num(c.open_window_units)}</strong>
                     </div>
                   )}
+                  <div className="list-row">
+                    <span>Unresolved return cases</span>
+                    <strong>{num(c.unresolved_cases)}</strong>
+                  </div>
                   <div className="info-note">
                     <Info size={16} />
                     <p>
                       Recent cohorts remain preliminary until their return
                       window has passed and open cases are resolved. Observation
                       cutoff:{" "}
-                      <DateText value={c.as_of || data.meta?.generated_at} />.
+                      <DateTimeText
+                        value={c.as_of || data.meta?.generated_at}
+                      />
+                      .
                     </p>
                   </div>
                 </section>
@@ -563,6 +590,7 @@ export function AnalyticsPage() {
                   {[
                     ["COD collected", data.cash?.cod_collected_amount],
                     ["Courier settlements", data.cash?.settled_amount],
+                    ["Confirmed cash refunds", data.cash?.refunded_amount],
                     ["Online payments", data.cash?.online_collected_amount],
                     [
                       "Sandbox receipts (separate)",
@@ -603,17 +631,69 @@ export function AnalyticsPage() {
                         cell: ({ getValue }) => pretty(getValue()),
                       },
                       { accessorKey: "units", header: "Accepted units" },
-                      { accessorKey: "count", header: "Return cases" },
+                      {
+                        accessorKey: "count",
+                        header: "Return cases",
+                        cell: ({ getValue }) => getValue() ?? "Unknown",
+                      },
                     ]}
                   />
                 </section>
               )}
             </>
           )}
+          {data.coverage && (
+            <section className="panel" aria-label="Reporting coverage">
+              <div className="panel-heading">
+                <h2>Reporting coverage</h2>
+                <span className="badge">All matching history</span>
+              </div>
+              <p className="muted">{data.coverage.basis}</p>
+              {[
+                [
+                  "Ordered units with unknown order dates",
+                  num(data.coverage.missing_order_date_units),
+                ],
+                [
+                  "Units with unknown delivery dates",
+                  num(data.coverage.missing_delivery_date_units),
+                ],
+                [
+                  "Units with unknown return dates",
+                  num(data.coverage.missing_return_date_units),
+                ],
+                [
+                  "Cancelled units without a dated event",
+                  num(data.coverage.cancelled_units_without_dated_event),
+                ],
+                [
+                  "Collections with unknown dates · company-wide",
+                  money(data.coverage.undated_collection_amount),
+                ],
+                [
+                  "Settlements with unknown dates · company-wide",
+                  money(data.coverage.undated_settlement_amount),
+                ],
+                [
+                  "Refunds with unknown dates · company-wide",
+                  money(data.coverage.undated_refund_amount),
+                ],
+              ].map(([label, value]) => (
+                <div className="list-row" key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+              <p className="muted">
+                Unknown event dates are excluded from dated activity. Coverage
+                counts do not belong to the selected reporting interval.
+              </p>
+            </section>
+          )}
           <div className="analytics-provenance">
             <span className="live-dot" />
             <span>
-              Generated <DateText value={data.meta?.generated_at} />
+              Generated <DateTimeText value={data.meta?.generated_at} />
             </span>
             <span>Customer details excluded</span>
             <span>Source: transactional records</span>
@@ -696,6 +776,105 @@ export function AnalyticsPage() {
         </div>
       )}
     </>
+  );
+}
+function DateTimeText({ value }: { value?: string }) {
+  if (!value) return <span>—</span>;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return <span>—</span>;
+  return (
+    <time dateTime={value}>
+      {new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Dhaka",
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date)}{" "}
+      (Dhaka)
+    </time>
+  );
+}
+function VariantPerformance({ query }: { query: string }) {
+  const [data, setData] = useState<Row | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const params = new URLSearchParams(query);
+  const productIds = (params.get("product_ids") || "")
+    .split(",")
+    .filter(Boolean);
+  const productId = productIds.length === 1 ? productIds[0] : "";
+  useEffect(() => {
+    let active = true;
+    setData(null);
+    setError("");
+    if (!productId) return;
+    setBusy(true);
+    const filters = new URLSearchParams(query);
+    filters.delete("product_ids");
+    filters.set("product_id", productId);
+    api<Row>(`analytics/variants/?${filters}`)
+      .then((result) => active && setData(result))
+      .catch((e) => active && setError(e.message))
+      .finally(() => active && setBusy(false));
+    return () => {
+      active = false;
+    };
+  }, [query, productId]);
+  return (
+    <section className="panel" aria-label="SKU performance">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">THE VARIANTS BEHIND THE PRODUCT</p>
+          <h2>SKU performance{data ? ` · ${data.product.name}` : ""}</h2>
+        </div>
+      </div>
+      {!productId ? (
+        <p className="muted">
+          Select one product and apply filters to compare its variants.
+        </p>
+      ) : busy ? (
+        <Loading label="Loading variant performance…" />
+      ) : error ? (
+        <Notice message={error} />
+      ) : (
+        <>
+          <p className="muted">
+            The same activity dates and merchandise definitions apply. Inactive
+            variants and variants without activity remain visible.
+          </p>
+          <DataTable
+            data={data?.results || []}
+            columns={[
+              { accessorKey: "code", header: "SKU" },
+              { accessorKey: "label", header: "Variant" },
+              { accessorKey: "ordered_units", header: "Ordered units" },
+              { accessorKey: "cancelled_units", header: "Cancelled units" },
+              { accessorKey: "delivered_units", header: "Delivered units" },
+              { accessorKey: "returned_units", header: "Accepted returns" },
+              {
+                accessorKey: "delivered_value",
+                header: "Delivered merchandise",
+                cell: ({ getValue }) => money(getValue()),
+              },
+              {
+                accessorKey: "returned_value",
+                header: "Accepted return merchandise",
+                cell: ({ getValue }) => money(getValue()),
+              },
+              {
+                accessorKey: "net_delivered_value",
+                header: "Net delivered merchandise",
+                cell: ({ getValue }) => money(getValue()),
+              },
+              {
+                accessorKey: "is_active",
+                header: "Catalogue status",
+                cell: ({ getValue }) => (getValue() ? "Active" : "Inactive"),
+              },
+            ]}
+          />
+        </>
+      )}
+    </section>
   );
 }
 function MetricCard({
@@ -1084,6 +1263,18 @@ export function ImportsPage() {
               />
             )}
             <Notice message={error} />
+            {bootstrap.user?.role === "administrator" &&
+              selected.kind === "history" &&
+              ["failed", "ready"].includes(selected.status) && (
+                <HistoricalCorrection
+                  key={selected.id}
+                  batchId={selected.id}
+                  onQueued={(batch) => {
+                    setSelected(batch);
+                    reload();
+                  }}
+                />
+              )}
             {selected.errors?.length > 0 && (
               <div className="validation-errors">
                 <h3>Resolve these source errors</h3>
@@ -1148,6 +1339,141 @@ export function ImportsPage() {
         </div>
       )}
     </>
+  );
+}
+function HistoricalCorrection({
+  batchId,
+  onQueued,
+}: {
+  batchId: string;
+  onQueued: (batch: Row) => void;
+}) {
+  const [preview, setPreview] = useState<Row | null>(null);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  return (
+    <section className="panel" aria-label="Historical correction review">
+      <div className="panel-heading">
+        <h3>Administrator correction review</h3>
+      </div>
+      <p className="muted">
+        Review the changes before authorizing a new historical revision.
+        Original transactions remain preserved. Current reports use the approved
+        revision; live stock and deliveries are unaffected.
+      </p>
+      <Notice message={error} />
+      {!preview ? (
+        <button
+          className="button secondary"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError("");
+            try {
+              setPreview(
+                await api<Row>(`imports/${batchId}/correction-preview/`),
+              );
+            } catch (e) {
+              setError((e as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Review historical correction
+        </button>
+      ) : (
+        <>
+          <p>
+            <strong>{preview.conflicts_count}</strong> existing source orders
+            require revision.
+          </p>
+          <DataTable
+            data={preview.orders.slice((page - 1) * pageSize, page * pageSize)}
+            columns={[
+              { accessorKey: "external_id", header: "Source order" },
+              {
+                accessorKey: "action",
+                header: "Action",
+                cell: ({ getValue }) => pretty(getValue()),
+              },
+              {
+                id: "old_units",
+                header: "Previous units",
+                cell: ({ row }) => row.original.before?.units ?? "—",
+              },
+              {
+                id: "new_units",
+                header: "New units",
+                cell: ({ row }) => row.original.after.units,
+              },
+              {
+                id: "old_total",
+                header: "Previous total",
+                cell: ({ row }) => money(row.original.before?.grand_total),
+              },
+              {
+                id: "new_total",
+                header: "New total",
+                cell: ({ row }) => money(row.original.after.grand_total),
+              },
+            ]}
+          />
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            count={preview.orders.length}
+            onPage={setPage}
+          />
+          {preview.can_correct && (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setBusy(true);
+                setError("");
+                try {
+                  onQueued(
+                    await api<Row>(`imports/${batchId}/correct/`, {
+                      method: "POST",
+                      body: JSON.stringify({
+                        reason,
+                        expected_revisions: preview.expected_revisions,
+                      }),
+                    }),
+                  );
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Field
+                label="Reason for historical correction"
+                hint="Describe the source error and the evidence supporting this correction."
+              >
+                <textarea
+                  required
+                  minLength={10}
+                  maxLength={1000}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </Field>
+              <button
+                className="button primary"
+                disabled={busy || reason.trim().length < 10}
+              >
+                Authorize historical revision
+              </button>
+            </form>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 function PlusIcon() {

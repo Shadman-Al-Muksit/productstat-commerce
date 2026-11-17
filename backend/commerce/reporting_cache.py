@@ -27,7 +27,7 @@ def get_cache():
 def revision_key(filters):
     audit = AuditEvent.objects.aggregate(count=Count("pk"), latest=Max("created_at"))
     imports = ImportBatch.objects.filter(status="completed").aggregate(count=Count("pk"), latest=Max("committed_at"))
-    facts = {"schema": 2, "start": filters["start"].isoformat(), "end": filters["end"].isoformat(),
+    facts = {"schema": 3, "start": filters["start"].isoformat(), "end": filters["end"].isoformat(),
              "products": sorted(set(filters["product_ids"])), "audit": audit, "imports": imports}
     digest = hashlib.sha256(json.dumps(facts, sort_keys=True, default=str, separators=(",", ":")).encode()).hexdigest()
     return "overview:" + digest

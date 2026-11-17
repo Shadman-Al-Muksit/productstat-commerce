@@ -1,0 +1,14 @@
+{
+  "source_run_url": "https://github.com/Shadman-Al-Muksit/productstat-commerce/actions/runs/44015893889",
+  "source_commit": "3bd432a82dfc915d6be4a5d423c368f6897b0011",
+  "fixture_size": {"seed_orders": 300, "skus": 80},
+  "status": "passed",
+  "transport": "Caddy HTTPS (local CI self-signed)",
+  "standalone_frontend": true,
+  "static_asset": true,
+  "product_image": true,
+  "product_metadata": true,
+  "order_number": "PS-261117-67992C75",
+  "workflow": "purchase/prepare/dispatch/deliver/COD collection/settlement/partial return/refund/report",
+  "elapsed_seconds": 0.56
+}

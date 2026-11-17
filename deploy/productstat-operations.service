@@ -1,0 +1,13 @@
+[Unit]
+Description=ProductStat operational attention check
+After=network-online.target
+[Service]
+Type=oneshot
+User=productstat
+WorkingDirectory=/srv/productstat
+ExecStart=/usr/bin/docker compose --env-file .env.production exec -T backend python manage.py operations_check
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=productstat-operations
+# Exit1 means actionable attention; configure the host monitor to route failures.
+# No email, webhook or message is sent by this unit.

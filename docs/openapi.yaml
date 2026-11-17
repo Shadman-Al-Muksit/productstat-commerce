@@ -48,6 +48,7 @@ paths:
         schema:
           type: string
           enum:
+          - cancelled_units
           - delivered_units
           - ordered_units
           - orders
@@ -96,6 +97,7 @@ paths:
         schema:
           type: string
           enum:
+          - cancelled_units
           - delivered_units
           - ordered_units
           - orders
@@ -122,6 +124,37 @@ paths:
               schema:
                 type: string
           description: Redacted rows using the same filter as drill-down.
+  /api/v1/analytics/variants/:
+    get:
+      operationId: analytics_variants
+      parameters:
+      - in: query
+        name: end
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: product_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: start
+        schema:
+          type: string
+          format: date
+      tags:
+      - Analytics
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariantResponse'
+          description: ''
   /api/v1/auth/login/:
     post:
       operationId: login_view_post
@@ -459,6 +492,66 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Batch'
+          description: ''
+  /api/v1/imports/{batch_id}/correct/:
+    post:
+      operationId: imports_correct
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Imports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorrectionInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CorrectionInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CorrectionInput'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+          description: ''
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+          description: ''
+  /api/v1/imports/{batch_id}/correction-preview/:
+    get:
+      operationId: imports_correction_preview
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Imports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorrectionPreview'
           description: ''
   /api/v1/imports/templates/:
     get:
@@ -891,6 +984,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InventoryResult'
+          description: ''
+  /api/v1/staff/operations-health/:
+    get:
+      operationId: staff_operations_health_get
+      description: Uncached, redacted attention signals. Attention still returns HTTP200;
+        the management check exits nonzero for monitors.
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsHealth'
           description: ''
   /api/v1/staff/orders/:
     get:
@@ -1354,14 +1463,22 @@ components:
             $ref: '#/components/schemas/ReportingProduct'
         meta:
           $ref: '#/components/schemas/ReportingMeta'
+        return_reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnReason'
+        coverage:
+          $ref: '#/components/schemas/ReportingCoverage'
       required:
       - cash
       - cohort
       - comparison
+      - coverage
       - delivery
       - filters
       - meta
       - products
+      - return_reasons
       - summary
       - trend
     Audit:
@@ -1702,6 +1819,100 @@ components:
       required:
       - currency
       - timezone
+    CorrectionInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 1000
+          minLength: 10
+        expected_revisions:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ExpectedRevision'
+      required:
+      - expected_revisions
+      - reason
+    CorrectionOrder:
+      type: object
+      properties:
+        external_id:
+          type: string
+        action:
+          $ref: '#/components/schemas/CorrectionOrderActionEnum'
+        current_order_id:
+          type: string
+          format: uuid
+          nullable: true
+        before_fingerprint:
+          type: string
+          nullable: true
+        after_fingerprint:
+          type: string
+        before:
+          allOf:
+          - $ref: '#/components/schemas/CorrectionSummary'
+          nullable: true
+        after:
+          $ref: '#/components/schemas/CorrectionSummary'
+      required:
+      - action
+      - after
+      - after_fingerprint
+      - before
+      - before_fingerprint
+      - current_order_id
+      - external_id
+    CorrectionOrderActionEnum:
+      enum:
+      - create
+      - skip
+      - revise
+      type: string
+      description: |-
+        * `create` - create
+        * `skip` - skip
+        * `revise` - revise
+    CorrectionPreview:
+      type: object
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        source_name:
+          type: string
+        can_correct:
+          type: boolean
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/CorrectionOrder'
+        expected_revisions:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ExpectedRevision'
+        conflicts_count:
+          type: integer
+      required:
+      - batch_id
+      - can_correct
+      - conflicts_count
+      - expected_revisions
+      - orders
+      - source_name
+    CorrectionSummary:
+      type: object
+      properties:
+        line_count:
+          type: integer
+        units:
+          type: integer
+        grand_total:
+          type: string
+      required:
+      - grand_total
+      - line_count
+      - units
     DispositionEnum:
       enum:
       - restock
@@ -1753,6 +1964,7 @@ components:
           nullable: true
         value:
           type: string
+          nullable: true
         event_at:
           type: string
           format: date-time
@@ -1771,6 +1983,50 @@ components:
       - source
       - status
       - value
+    ExhaustedOutbox:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        attempts:
+          type: integer
+      required:
+      - attempts
+      - id
+      - kind
+    ExpectedRevision:
+      type: object
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        fingerprint:
+          type: string
+          maxLength: 64
+      required:
+      - fingerprint
+      - order_id
+    FailedImport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - id
+      - kind
+      - status
     Health:
       type: object
       properties:
@@ -1891,6 +2147,59 @@ components:
       required:
       - password
       - username
+    OperationsCounts:
+      type: object
+      properties:
+        overdue_cod_orders:
+          type: integer
+        failed_outbox_jobs:
+          type: integer
+        failed_imports:
+          type: integer
+        payment_exceptions:
+          type: integer
+      required:
+      - failed_imports
+      - failed_outbox_jobs
+      - overdue_cod_orders
+      - payment_exceptions
+    OperationsHealth:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        checked_at:
+          type: string
+          format: date-time
+        counts:
+          $ref: '#/components/schemas/OperationsCounts'
+        overdue_cod_orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/OverdueCOD'
+        failed_outbox_jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExhaustedOutbox'
+        failed_imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/FailedImport'
+        payment_exceptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentException'
+        sample_limit:
+          type: integer
+      required:
+      - checked_at
+      - counts
+      - failed_imports
+      - failed_outbox_jobs
+      - overdue_cod_orders
+      - payment_exceptions
+      - sample_limit
+      - status
     Order:
       type: object
       properties:
@@ -1942,6 +2251,7 @@ components:
         created_at:
           type: string
           format: date-time
+          nullable: true
         confirmed_at:
           type: string
           format: date-time
@@ -1960,6 +2270,12 @@ components:
           nullable: true
         is_historical:
           type: boolean
+        is_current:
+          type: boolean
+        supersedes_id:
+          type: string
+          format: uuid
+          nullable: true
         source:
           type: string
         lines:
@@ -1998,6 +2314,7 @@ components:
       - email
       - grand_total
       - id
+      - is_current
       - is_historical
       - lines
       - number
@@ -2014,6 +2331,7 @@ components:
       - source
       - status
       - subtotal
+      - supersedes_id
       - tax_total
     OrderAction:
       type: object
@@ -2134,6 +2452,33 @@ components:
       - page
       - page_size
       - results
+    OverdueCOD:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        age_hours:
+          type: number
+          format: double
+      required:
+      - age_hours
+      - confirmed_at
+      - created_at
+      - id
+      - number
+      - status
     PatchedCompany:
       type: object
       properties:
@@ -2276,6 +2621,22 @@ components:
       - cod
       - sandbox
       - sslcommerz_enabled
+    PaymentException:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        unreconciled_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - id
+      - number
+      - unreconciled_amount
     PaymentMethodEnum:
       enum:
       - cod
@@ -2513,6 +2874,8 @@ components:
           type: string
         settled_amount:
           type: string
+        refunded_amount:
+          type: string
         exception_collected_amount:
           type: string
         sandbox_collected_amount:
@@ -2526,6 +2889,7 @@ components:
       - exception_collected_amount
       - online_collected_amount
       - product_filter_applied
+      - refunded_amount
       - sandbox_collected_amount
       - scope
       - settled_amount
@@ -2542,6 +2906,8 @@ components:
           nullable: true
         open_window_units:
           type: integer
+        unresolved_cases:
+          type: integer
         preliminary:
           type: boolean
         as_of:
@@ -2557,6 +2923,7 @@ components:
       - preliminary
       - return_rate
       - returned_units
+      - unresolved_cases
     ReportingComparison:
       type: object
       properties:
@@ -2579,6 +2946,31 @@ components:
       - end
       - start
       - summary
+    ReportingCoverage:
+      type: object
+      properties:
+        missing_order_date_units:
+          type: integer
+        missing_delivery_date_units:
+          type: integer
+        missing_return_date_units:
+          type: integer
+        cancelled_units_without_dated_event:
+          type: integer
+        undated_collection_amount:
+          type: string
+        undated_settlement_amount:
+          type: string
+        basis:
+          type: string
+      required:
+      - basis
+      - cancelled_units_without_dated_event
+      - missing_delivery_date_units
+      - missing_order_date_units
+      - missing_return_date_units
+      - undated_collection_amount
+      - undated_settlement_amount
     ReportingDelivery:
       type: object
       properties:
@@ -2639,8 +3031,11 @@ components:
           type: string
         money_basis:
           type: string
+        cancellation_basis:
+          type: string
       required:
       - basis
+      - cancellation_basis
       - customer_data
       - generated_at
       - money_basis
@@ -2651,6 +3046,8 @@ components:
           type: integer
         ordered_units:
           type: integer
+        cancelled_units:
+          type: integer
         ordered_value:
           type: string
         delivered_units:
@@ -2659,6 +3056,8 @@ components:
           type: string
         returned_units:
           type: integer
+        returned_value:
+          type: string
         refunded_amount:
           type: string
         net_delivered_value:
@@ -2674,6 +3073,7 @@ components:
         image_url:
           type: string
       required:
+      - cancelled_units
       - category
       - delivered_units
       - delivered_value
@@ -2686,12 +3086,15 @@ components:
       - orders
       - refunded_amount
       - returned_units
+      - returned_value
     ReportingSummary:
       type: object
       properties:
         orders:
           type: integer
         ordered_units:
+          type: integer
+        cancelled_units:
           type: integer
         ordered_value:
           type: string
@@ -2701,11 +3104,14 @@ components:
           type: string
         returned_units:
           type: integer
+        returned_value:
+          type: string
         refunded_amount:
           type: string
         net_delivered_value:
           type: string
       required:
+      - cancelled_units
       - delivered_units
       - delivered_value
       - net_delivered_value
@@ -2714,12 +3120,15 @@ components:
       - orders
       - refunded_amount
       - returned_units
+      - returned_value
     ReportingTrend:
       type: object
       properties:
         orders:
           type: integer
         ordered_units:
+          type: integer
+        cancelled_units:
           type: integer
         ordered_value:
           type: string
@@ -2729,6 +3138,8 @@ components:
           type: string
         returned_units:
           type: integer
+        returned_value:
+          type: string
         refunded_amount:
           type: string
         net_delivered_value:
@@ -2737,6 +3148,7 @@ components:
           type: string
           format: date
       required:
+      - cancelled_units
       - date
       - delivered_units
       - delivered_value
@@ -2746,6 +3158,7 @@ components:
       - orders
       - refunded_amount
       - returned_units
+      - returned_value
     Return:
       type: object
       properties:
@@ -2866,6 +3279,20 @@ components:
       - page
       - page_size
       - results
+    ReturnReason:
+      type: object
+      properties:
+        reason:
+          type: string
+        units:
+          type: integer
+        count:
+          type: integer
+          nullable: true
+      required:
+      - count
+      - reason
+      - units
     RoleEnum:
       enum:
       - customer
@@ -2942,6 +3369,7 @@ components:
         dispatched_at:
           type: string
           format: date-time
+          nullable: true
         delivered_at:
           type: string
           format: date-time
@@ -2953,6 +3381,14 @@ components:
       - id
       - state
       - tracking_number
+    StatusEnum:
+      enum:
+      - ok
+      - attention
+      type: string
+      description: |-
+        * `ok` - ok
+        * `attention` - attention
     Upload:
       type: object
       properties:
@@ -3049,6 +3485,95 @@ components:
             $ref: '#/components/schemas/User'
       required:
       - results
+    VariantFilters:
+      type: object
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+        timezone:
+          type: string
+        currency:
+          type: string
+      required:
+      - currency
+      - end
+      - product_id
+      - start
+      - timezone
+    VariantProduct:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+      required:
+      - id
+      - name
+    VariantResponse:
+      type: object
+      properties:
+        product:
+          $ref: '#/components/schemas/VariantProduct'
+        filters:
+          $ref: '#/components/schemas/VariantFilters'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/VariantRow'
+      required:
+      - filters
+      - product
+      - results
+    VariantRow:
+      type: object
+      properties:
+        sku_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        label:
+          type: string
+        is_active:
+          type: boolean
+        ordered_units:
+          type: integer
+        cancelled_units:
+          type: integer
+        delivered_units:
+          type: integer
+        returned_units:
+          type: integer
+        delivered_value:
+          type: string
+        returned_value:
+          type: string
+        refunded_amount:
+          type: string
+        net_delivered_value:
+          type: string
+      required:
+      - cancelled_units
+      - code
+      - delivered_units
+      - delivered_value
+      - is_active
+      - label
+      - net_delivered_value
+      - ordered_units
+      - refunded_amount
+      - returned_units
+      - returned_value
+      - sku_id
     Zone:
       type: object
       properties:

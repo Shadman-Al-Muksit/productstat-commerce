@@ -36,7 +36,7 @@ def refund_data(item):
 def order_data(order):
     cash=sum((payment.amount for payment in order.payments.all() if payment.status in ['successful','exception']),Decimal('0'))
     refunds=sum((refund.amount for refund in order.refunds.all() if refund.status=='confirmed'),Decimal('0'))
-    result={'id':str(order.id),'number':order.number,'status':order.status,'payment_method':order.payment_method,'customer_name':order.customer_name,'email':order.email,'phone':order.phone,'address':order.address,'is_historical':order.is_historical,'source':order.source}
+    result={'id':str(order.id),'number':order.number,'status':order.status,'payment_method':order.payment_method,'customer_name':order.customer_name,'email':order.email,'phone':order.phone,'address':order.address,'is_historical':order.is_historical,'is_current':order.is_current,'supersedes_id':str(order.supersedes_id) if order.supersedes_id else None,'source':order.source}
     for field in ['subtotal','discount_total','shipping_total','tax_total','grand_total']:
         result[field]=str(getattr(order,field))
     for field in ['created_at','confirmed_at','prepared_at','dispatched_at','delivered_at','reservation_expires_at']:
@@ -198,7 +198,7 @@ def request_return(request,pk):
 @permission_classes([IsOperator])
 def staff_orders(request,pk=None):
     if pk: return Response(order_data(accessible_order(request,pk,staff=True)))
-    queryset=order_queryset().order_by('-created_at')
+    queryset=order_queryset().filter(is_current=True).order_by('-created_at')
     if request.query_params.get('status'): queryset=queryset.filter(status=request.query_params['status'])
     if request.query_params.get('q'): queryset=queryset.filter(Q(number__icontains=request.query_params['q'])|Q(customer_name__icontains=request.query_params['q'])|Q(phone__icontains=request.query_params['q']))
     if request.query_params.get('source')=='live': queryset=queryset.filter(is_historical=False)

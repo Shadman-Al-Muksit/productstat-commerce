@@ -1,5 +1,7 @@
 # ProductStat Commerce
 
+[![Verify ProductStat](https://github.com/Shadman-Al-Muksit/productstat-commerce/actions/workflows/verify.yml/badge.svg)](https://github.com/Shadman-Al-Muksit/productstat-commerce/actions/workflows/verify.yml)
+
 A Bangladesh e-commerce platform connecting a customer storefront, staff operations and auditable product analytics. Built for one company, BDT and domestic physical-goods delivery.
 
 The useful question is not only “what sold?” A manager can follow a product from ordered units to delivery outcomes, accepted returns and confirmed money movements, then inspect the contributing records.
@@ -18,6 +20,8 @@ bash scripts/dev.sh
 ```
 
 Open **http://localhost:3000**. On Windows, `Start-ProductStat.ps1` starts the same WSL application. Local API documentation is at **http://localhost:8001/api/v1/docs/**.
+
+For a local preview of the optimized frontend, run `npm run build` in `frontend`, then `bash scripts/dev.sh --preview`. This still uses local demo settings; HTTPS deployment uses the separate Compose configuration. The launcher refuses duplicate application ports and stops its owned process groups together.
 
 `seed_demo` creates 2,000 SKUs, 25,000 historical orders and 75,000 lines across a synthetic year. `--small` creates a smaller fresh-development fixture. Existing seeded history and live stock are not reset by repeated seeding. Never change fixture size by deleting business data.
 
@@ -39,8 +43,10 @@ Local development password: `ProductStatDemo!2026`. Production seeding refuses t
 - Staff preparation, dispatch, delivery failures, partial cancellation, COD collection and courier settlement.
 - Partial returns, receipt/inspection, stock disposition, refund obligations and verified refund recording.
 - Typed REST API, backend role permissions, session/CSRF protection, audit events and redacted request logs.
-- Activity reports, delivery-cohort return rates, product comparisons, event drilldowns and matching CSV exports.
-- Validated catalogue/inventory/historical CSV batches, durable queued work and repeat-import protection.
+- Product and SKU activity reports, delivery-cohort return rates, accepted-return reasons, comparisons, event drilldowns and matching CSV exports. Net delivered merchandise subtracts accepted returns at inspection; cash collections, settlements and refunds remain separate measures.
+- Historical-date coverage identifies records that cannot be assigned to a reporting period. Missing source dates remain unknown.
+- Validated catalogue/inventory/historical CSV batches, durable queued work and exact-repeat/conflict checks. Administrator-reviewed historical revisions retain the original financial evidence and include only the current revision in reports.
+- Protected operational health checks flag COD orders waiting at least 48 hours, exhausted background work, failed imports and unreconciled payment exceptions. The CLI and timer expose attention signals for a deployment's alert receiver.
 
 COD works locally. **SSLCOMMERZ requires real sandbox merchant credentials** in the ignored `.env`; absent credentials produce an explicit unavailable response. A browser success redirect never proves payment. Sandbox money cannot authorize real-company fulfilment. Refund confirmation records external evidence; it does not pretend to execute a gateway transfer.
 
@@ -65,7 +71,7 @@ bash scripts/load-test.sh             # 20 browsing sessions + five staff sessio
 
 With the application running, execute `npm run test:e2e` from `frontend`. On this WSL1 machine, use Windows Node with the installed Windows Playwright Chromium; the application/database still run in WSL. Set `PLAYWRIGHT_EXECUTABLE_PATH` if a browser location must be supplied.
 
-Verification results, environment limits and release prerequisites belong in [the validation record](docs/VALIDATION.md). A successful local demonstration is not evidence of a hosted production deployment.
+Verification results, environment limits and release prerequisites belong in [the validation record](docs/VALIDATION.md). The latest two-minute candidate benchmark passed response checks and the catalogue latency target, but missed the analytics p95 target; optimization and retesting are in progress. A successful local demonstration is not evidence of a hosted production deployment.
 
 ## Deployment boundary
 

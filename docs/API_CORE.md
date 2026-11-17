@@ -52,6 +52,8 @@ Order line: `{id,sku_id,sku_code,product_name,variant_name,quantity,cancelled_qu
 
 ## Preparation, tax and environment boundaries
 
+Return eligibility ends at the end of the configured calendar day in `Asia/Dhaka`: a delivery on 1 November with a seven-day window accepts requests through 8 November, including that evening, and closes at midnight on 9 November. This is independent of refund completion.
+
 `POST staff/orders/<uuid>/action/ {action:"prepare"}` moves confirmed orders to `preparing` and snapshots `prepared_at`. Dispatch accepts confirmed or preparing orders; cancellation accepts both before dispatch. Lists accept `page` and `page_size` (maximum 100) and return count/page/page_size/results.
 
 Company `tax_rate` is an exact decimal percentage from 0 to 100, configurable through staff settings and exposed by bootstrap. Demo defaults to zero. Checkout taxes merchandise only, exclusive of shipping, and rounds each line to paisa. `OrderLine.tax_total` and `Order.tax_total` are immutable sale snapshots; changes to the current tax rate never rewrite them. `grand_total` includes tax. Partial cancellation and accepted returns allocate snapshotted tax using cumulative rounding so repeated partial actions cannot manufacture pennies. Full paid cancellation refunds shipping too. RefundLine.amount is total cash; `tax_amount` and `shipping_amount` identify its components for merchandise-only reporting.

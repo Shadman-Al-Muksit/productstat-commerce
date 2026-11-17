@@ -70,10 +70,15 @@ test('guest purchase to COD settlement, partial return, refund and reconciled an
   await mutation(staff, `staff/returns/${returned.id}/action/`, {action: 'approve'});
   await mutation(staff, `staff/returns/${returned.id}/action/`, {action: 'receive'});
   await mutation(staff, `staff/returns/${returned.id}/action/`, {action: 'inspect', lines: [{id: returned.lines[0].id, accepted_quantity: 1, restock_quantity: 1, disposition: 'restock'}]});
+  const pendingRefund = await (await staff.get('/api/v1/' + filter)).json();
+  expect(pendingRefund.summary.returned_units - before.summary.returned_units).toBe(1);
+  expect(Number(pendingRefund.summary.returned_value)).toBeGreaterThan(Number(before.summary.returned_value));
+  expect(pendingRefund.summary.refunded_amount).toBe(before.summary.refunded_amount);
   const updated = await (await staff.get(`/api/v1/staff/orders/${order.id}/`)).json();
   expect(updated.lines[0].returned_quantity).toBe(1);
   await mutation(staff, `staff/refunds/${updated.refunds[0].id}/confirm/`, {reference: 'Synthetic verified refund ' + order.number});
   const after = await (await staff.get('/api/v1/' + filter)).json();
+  expect(after.summary.net_delivered_value).toBe(pendingRefund.summary.net_delivered_value);
   expect(after.summary.delivered_units - before.summary.delivered_units).toBe(2);
   expect(after.summary.returned_units - before.summary.returned_units).toBe(1);
   const exported = await staff.get(`/api/v1/analytics/export/?metric=delivered_units&start=${date}&end=${date}&product_ids=${product.id}`);
@@ -94,6 +99,14 @@ test('analyst workspace exposes reports and protects operational customer record
   expect((await page.request.get('/api/v1/staff/orders/')).status()).toBe(403);
   await expect(page.locator('.sidebar').getByRole('link', {name: 'Orders', exact: true})).toHaveCount(0);
   await page.screenshot({path: '../docs/screenshots/analytics-desktop.png', fullPage: true});
+  await page.getByRole('button', {name: 'Product comparison', exact: true}).click();
+  await page.locator('.product-filter summary').click();
+  await page.locator('.product-filter input[type="checkbox"]').first().check();
+  await page.locator('.product-filter summary').click();
+  const variants = page.waitForResponse(response => response.url().includes('/api/v1/analytics/variants/'));
+  await page.getByRole('button', {name: 'Apply filters', exact: true}).click();
+  expect((await variants).status()).toBe(200);
+  await expect(page.getByRole('region', {name: 'SKU performance'}).getByRole('columnheader', {name: 'SKU', exact: true})).toBeVisible();
   await page.setViewportSize({width: 390, height: 844});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBeTruthy();
 });
@@ -130,5 +143,48 @@ test('staff order drawer prepares and cancels an order through real validated ac
   await page.screenshot({path:'../docs/screenshots/staff-order.png',fullPage:true});
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
+  await page.goto('/staff');
+  await expect(page.getByRole('region', {name:'Operations health'}).getByText('COD orders waiting 48+ hours', {exact:true})).toBeVisible();
   await guest.dispose();
+});
+
+test('administrator reviews and queues a historical correction without changing live stock', async ({page, playwright, baseURL}) => {
+  const staff = await playwright.request.newContext({baseURL});
+  await login(staff);
+  const catalogue = await (await staff.get('/api/v1/catalog/products/?q=Everyday%20Tote')).json();
+  const product = catalogue.results[0];
+  const sku = product.skus[0];
+  const source = 'synthetic-e2e-revision-' + Date.now();
+  const observed = new Date(Date.now() - 3600_000).toISOString();
+  async function upload(price: number) {
+    const bootstrap = await (await staff.get('/api/v1/bootstrap/')).json();
+    const csv = 'source_order_id,source_line_id,sku,ordered_at,status,payment_method,quantity,unit_price,shipped_quantity,delivered_quantity,delivered_at\n' +
+      `order-1,line-1,${sku.code},${observed},delivered,cod,1,${price},1,1,${observed}\n`;
+    const response = await staff.post('/api/v1/imports/', {headers: {'X-CSRFToken': bootstrap.csrfToken}, multipart: {
+      kind: 'history', source_name: source, files: {name: 'history.csv', mimeType: 'text/csv', buffer: Buffer.from(csv)},
+    }});
+    expect(response.status(), await response.text()).toBe(202);
+    return (await response.json()).id;
+  }
+  async function status(id: string) { return (await (await staff.get(`/api/v1/imports/${id}/`)).json()).status; }
+  const first = await upload(100);
+  await expect.poll(() => status(first), {timeout: 30_000}).toBe('ready');
+  await mutation(staff, `imports/${first}/commit/`, {});
+  await expect.poll(() => status(first), {timeout: 30_000}).toBe('completed');
+  const second = await upload(150);
+  await expect.poll(() => status(second), {timeout: 30_000}).toBe('failed');
+  await page.goto('/imports');
+  await page.getByLabel('Username', {exact: true}).fill('administrator');
+  await page.getByLabel('Password', {exact: true}).fill(password);
+  await page.getByRole('button', {name: 'Sign in', exact: true}).click();
+  await page.getByRole('row').filter({hasText: source}).first().getByRole('button', {name: 'history.csv', exact: true}).click();
+  await page.getByRole('button', {name: 'Review historical correction', exact: true}).click();
+  const review = page.getByRole('region', {name: 'Historical correction review'});
+  await expect(review.getByRole('cell', {name: 'Revise', exact: true})).toBeVisible();
+  await review.getByLabel('Reason for historical correction').fill('Synthetic verification: source export price corrected against original record.');
+  await review.getByRole('button', {name: 'Authorize historical revision', exact: true}).click();
+  await expect.poll(() => status(second), {timeout: 30_000}).toBe('completed');
+  const current = await (await staff.get(`/api/v1/catalog/products/${product.slug}/`)).json();
+  expect(current.skus.find((item: any) => item.id === sku.id).available).toBe(sku.available);
+  await staff.dispose();
 });

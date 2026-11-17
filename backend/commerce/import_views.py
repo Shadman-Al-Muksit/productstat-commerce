@@ -9,9 +9,9 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.generics import get_object_or_404
 
-from .imports import ImportProblem, stage_upload, template_csv
+from .imports import ImportProblem, correction_preview, prepare_correction, stage_upload, template_csv
 from .models import ImportBatch, OutboxEvent
-from .permissions import IsOperator
+from .permissions import IsAdministrator, IsOperator
 
 
 CanImport = IsOperator
@@ -33,6 +33,41 @@ class UploadSerializer(serializers.Serializer):
     source_name = serializers.CharField()
     file = serializers.FileField(required=False)
     files = serializers.ListField(child=serializers.FileField(), required=False)
+
+
+class CorrectionSummarySerializer(serializers.Serializer):
+    line_count = serializers.IntegerField()
+    units = serializers.IntegerField()
+    grand_total = serializers.CharField()
+
+
+class ExpectedRevisionSerializer(serializers.Serializer):
+    order_id = serializers.UUIDField()
+    fingerprint = serializers.CharField(max_length=64, allow_blank=True)
+
+
+class CorrectionOrderSerializer(serializers.Serializer):
+    external_id = serializers.CharField()
+    action = serializers.ChoiceField(choices=["create", "skip", "revise"])
+    current_order_id = serializers.UUIDField(allow_null=True)
+    before_fingerprint = serializers.CharField(allow_blank=True, allow_null=True)
+    after_fingerprint = serializers.CharField()
+    before = CorrectionSummarySerializer(allow_null=True)
+    after = CorrectionSummarySerializer()
+
+
+class CorrectionPreviewSerializer(serializers.Serializer):
+    batch_id = serializers.UUIDField()
+    source_name = serializers.CharField()
+    can_correct = serializers.BooleanField()
+    orders = CorrectionOrderSerializer(many=True)
+    expected_revisions = serializers.DictField(child=ExpectedRevisionSerializer())
+    conflicts_count = serializers.IntegerField()
+
+
+class CorrectionInputSerializer(serializers.Serializer):
+    reason = serializers.CharField(min_length=10, max_length=1000)
+    expected_revisions = serializers.DictField(child=ExpectedRevisionSerializer())
 
 
 def _wake_worker():
@@ -92,6 +127,43 @@ def commit(request, batch_id):
     return Response(BatchSerializer(batch).data, status=202)
 
 
+@extend_schema(operation_id="imports_correction_preview", responses=CorrectionPreviewSerializer, tags=["Imports"])
+@api_view(["GET"])
+@permission_classes([IsAdministrator])
+def preview_correction(request, batch_id):
+    batch = get_object_or_404(ImportBatch, pk=batch_id)
+    try:
+        return Response(correction_preview(batch))
+    except ImportProblem as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+@extend_schema(operation_id="imports_correct", request=CorrectionInputSerializer, responses={200: BatchSerializer, 202: BatchSerializer}, tags=["Imports"])
+@api_view(["POST"])
+@permission_classes([IsAdministrator])
+def correct(request, batch_id):
+    serializer = CorrectionInputSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    # JSON keeps UUID identities as strings in the durable reviewed proposal.
+    expected = {external_id: {"order_id": str(value["order_id"]), "fingerprint": value["fingerprint"]}
+                for external_id, value in serializer.validated_data["expected_revisions"].items()}
+    try:
+        with transaction.atomic():
+            batch = get_object_or_404(ImportBatch.objects.select_for_update(), pk=batch_id)
+            if batch.status == "completed":
+                return Response(BatchSerializer(batch).data)
+            if batch.status == "committing":
+                review = batch.result.get("_correction", {})
+                if review.get("reviewer_id") != request.user.pk or review.get("reason") != serializer.validated_data["reason"].strip() or review.get("expected_revisions") != expected:
+                    raise ValidationError("A different commit or correction is already in progress for this batch.")
+                return Response(BatchSerializer(batch).data, status=202)
+            prepare_correction(batch, request.user, serializer.validated_data["reason"], expected)
+            _schedule("import_commit", batch)
+    except ImportProblem as exc:
+        raise ValidationError(str(exc)) from exc
+    return Response(BatchSerializer(batch).data, status=202)
+
+
 @extend_schema(operation_id="imports_template", parameters=[OpenApiParameter("kind", OpenApiTypes.STR, enum=["catalog", "opening_stock", "adjustments", "history", "orders", "lines", "shipments", "returns", "refunds", "payments"])],
                responses={(200, "text/csv"): OpenApiResponse(OpenApiTypes.STR, description="CSV header template.")}, tags=["Imports"])
 @api_view(["GET"])
@@ -107,4 +179,5 @@ def templates(request):
     return response
 
 
-urlpatterns = [path("", batches), path("templates/", templates), path("<uuid:batch_id>/", batch_detail), path("<uuid:batch_id>/commit/", commit)]
+urlpatterns = [path("", batches), path("templates/", templates), path("<uuid:batch_id>/", batch_detail), path("<uuid:batch_id>/commit/", commit),
+               path("<uuid:batch_id>/correction-preview/", preview_correction), path("<uuid:batch_id>/correct/", correct)]
