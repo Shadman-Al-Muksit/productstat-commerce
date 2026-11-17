@@ -294,6 +294,16 @@ def test_redis_failure_falls_back_to_fresh_database_report(reference_data):
     assert response.json()["summary"]["ordered_value"] == "370.00"
 
 
+def test_persistently_busy_report_returns_retry_after_without_duplicate_work(reference_data):
+    from commerce.reporting_cache import ReportInProgress
+    client, _ = staff_client()
+    with patch("commerce.reporting_views.cached_overview", side_effect=ReportInProgress()):
+        response = client.get("/api/v1/analytics/?start=2026-01-01&end=2026-01-31")
+    assert response.status_code == 503
+    assert response["Retry-After"] == "1"
+    assert response.json() == {"detail": "The report is still being prepared. Retry shortly."}
+
+
 def test_purchase_delivery_return_and_refund_immediately_refresh_http_cache(reference_data, settings):
     settings.PRODUCTSTAT_DEMO = True
     client, _ = staff_client()
@@ -435,7 +445,7 @@ def test_return_reasons_count_multi_line_case_once_and_apply_product_filters(ref
     other_sku = SKU.objects.create(product=other, code="REASON-OTHER", price=50)
     order = Order.objects.create(number="REASON-ORDER", customer_name="Synthetic", email="", phone="", created_at=at("2026-02-01T12:00:00"))
     shipment = Shipment.objects.create(order=order, state="delivered", dispatched_at=order.created_at, delivered_at=at("2026-02-02T12:00:00"))
-    returned = ReturnRequest.objects.create(order=order, status="inspected", reason="Fit", inspected_at=at("2026-02-12T12:00:00"))
+    returned = ReturnRequest.objects.create(order=order, status="inspected", reason="Synthetic: size or preference", inspected_at=at("2026-02-12T12:00:00"))
     for current_sku, quantity in ((sku, 1), (second, 2), (other_sku, 3)):
         line = OrderLine.objects.create(order=order, sku=current_sku, sku_code=current_sku.code, product_name=current_sku.product.name, quantity=quantity,
                                         unit_price=current_sku.price, shipped_quantity=quantity, delivered_quantity=quantity, returned_quantity=quantity,
@@ -447,9 +457,9 @@ def test_return_reasons_count_multi_line_case_once_and_apply_product_filters(ref
     zero = ReturnRequest.objects.create(order=order, status="inspected", reason="Unaccepted", inspected_at=at("2026-02-12T12:00:00"))
     ReturnLine.objects.create(return_request=zero, order_line=order.lines.first(), quantity=1, accepted_quantity=0)
     all_products = analytics(filters_from_params({"start": "2026-02-01", "end": "2026-02-28"}))
-    assert next(row for row in all_products["return_reasons"] if row["reason"] == "Fit") == {"reason": "Fit", "units": 6, "count": 1}
+    assert next(row for row in all_products["return_reasons"] if row["reason"] == "Size or preference") == {"reason": "Size or preference", "units": 6, "count": 1}
     selected = analytics(filters_from_params({"start": "2026-02-01", "end": "2026-02-28", "product_ids": str(reference_data.id)}))
-    assert next(row for row in selected["return_reasons"] if row["reason"] == "Fit") == {"reason": "Fit", "units": 3, "count": 1}
+    assert next(row for row in selected["return_reasons"] if row["reason"] == "Size or preference") == {"reason": "Size or preference", "units": 3, "count": 1}
     assert not any(row["reason"] in {"Rejected", "Unaccepted"} for row in selected["return_reasons"])
     assert sum(row["units"] for row in selected["return_reasons"]) == selected["summary"]["returned_units"]
 
@@ -478,12 +488,84 @@ def test_unknown_dates_remain_outside_intervals_with_explicit_all_record_coverag
     assert result["summary"]["orders"] == result["summary"]["delivered_units"] == result["summary"]["returned_units"] == 0
     assert result["cash"]["collected_amount"] == result["cash"]["settled_amount"] == "0.00"
     assert result["coverage"] == {"missing_order_date_units": 4, "missing_delivery_date_units": 3, "missing_return_date_units": 1,
-                                   "cancelled_units_without_dated_event": 1, "undated_collection_amount": "300.00", "undated_settlement_amount": "50.00",
+                                   "cancelled_units_without_dated_event": 1, "undated_collection_amount": "300.00", "undated_settlement_amount": "50.00", "undated_refund_amount": "0.00",
                                    "basis": "All matching current history, not the selected interval; unknown dates are excluded from dated metrics. Unit counts follow product filters; monetary coverage is company-wide."}
     unknown.refresh_from_db()
     assert unknown.created_at is None
     shipment.refresh_from_db()
     assert shipment.dispatched_at is None
+
+
+def test_return_reason_categories_never_publish_private_free_text(reference_data):
+    order = Order.objects.get(number="REF-1")
+    line = order.lines.get()
+    original = order.returns.get()
+    original.reason = "wrong_item"
+    original.save(update_fields=["reason"])
+    private_reason = "Damaged item - Private Person, 01712345678"
+    for index, reason in enumerate((" WRONG ITEM RECEIVED ", private_reason, "", "Unknown custom text")):
+        extra = Order.objects.create(number=f"PRIVATE-REASON-{index}", customer_name="Synthetic", created_at=order.created_at)
+        extra_line = OrderLine.objects.create(order=extra, sku=line.sku, sku_code=line.sku_code, product_name=line.product_name,
+                                              quantity=1, unit_price=100, shipped_quantity=1, delivered_quantity=1,
+                                              returned_quantity=1, delivered_at=at("2026-02-02T12:00:00"), returned_at=at("2026-02-12T12:00:00"))
+        request = ReturnRequest.objects.create(order=extra, status="inspected", reason=reason, inspected_at=at("2026-02-12T12:00:00"))
+        ReturnLine.objects.create(return_request=request, order_line=extra_line, quantity=1, accepted_quantity=1)
+    client, _ = staff_client()
+    result = client.get("/api/v1/analytics/?start=2026-02-01&end=2026-02-28")
+    assert result.status_code == 200
+    categories = {row["reason"]: row for row in result.json()["return_reasons"]}
+    assert categories == {"Wrong item received": {"reason": "Wrong item received", "units": 2, "count": 2},
+                          "Other/unspecified": {"reason": "Other/unspecified", "units": 3, "count": 3}}
+    for path in ("", "drilldown/?metric=returned_units&", "export/?metric=returned_units&"):
+        url = "/api/v1/analytics/" + (path or "?") + "start=2026-02-01&end=2026-02-28"
+        body = client.get(url).content.decode()
+        assert "Private Person" not in body and "01712345678" not in body
+        assert "Unknown custom text" not in body
+    assert ReturnRequest.objects.filter(pk=request.pk, reason="Unknown custom text").exists()
+    assert ReturnRequest.objects.filter(reason=private_reason).exists()
+
+
+def test_undated_refund_coverage_is_confirmed_current_company_wide(reference_data):
+    order = Order.objects.get(number="REF-1")
+    Refund.objects.create(order=order, amount="17.25", status="confirmed", confirmed_at=None, reason="Undated historical payout")
+    Refund.objects.create(order=order, amount="100.00", status="pending", confirmed_at=None, reason="Not paid")
+    old = Order.objects.create(number="OLD-UNDATED-REFUND", customer_name="Synthetic", is_historical=True, is_current=False,
+                               created_at=None)
+    Refund.objects.create(order=old, amount="80.00", status="confirmed", confirmed_at=None, reason="Retained old evidence")
+    other = Product.objects.create(name="No matching merchandise", slug="empty-refund-filter")
+    result = analytics(filters_from_params({"start": "2030-01-01", "end": "2030-01-31", "product_ids": str(other.id)}))
+    assert result["coverage"]["undated_refund_amount"] == "17.25"
+    assert result["cash"]["refunded_amount"] == result["summary"]["refunded_amount"] == "0.00"
+
+
+@pytest.mark.parametrize("snapshot_dates,delivery_events,return_events,missing_delivery,missing_return", [
+    (False, [(2, True), (1, False)], [(1, True), (2, False)], 1, 2),
+    (True, [(2, True), (1, False)], [(1, True), (2, False)], 1, 2),
+    (True, [(1, True)], [(1, True)], 2, 2),
+    (True, [], [], 0, 0),
+    (True, [(1, True), (2, True)], [(1, True), (2, True)], 0, 0),
+    (False, [(3, True)], [(3, True)], 0, 0),
+])
+def test_coverage_candidates_preserve_mixed_and_incomplete_event_history(reference_data, snapshot_dates, delivery_events, return_events, missing_delivery, missing_return):
+    from commerce.reporting import reporting_coverage
+    sku = reference_data.skus.get()
+    order = Order.objects.create(number="COVERAGE-MIXED", customer_name="Synthetic", is_historical=True,
+                                  created_at=at("2026-01-01T12:00:00"))
+    delivered_at = at("2026-01-02T12:00:00")
+    returned_at = at("2026-01-03T12:00:00")
+    line = OrderLine.objects.create(order=order, sku=sku, sku_code=sku.code, product_name=reference_data.name,
+                                    quantity=3, shipped_quantity=3, delivered_quantity=3, returned_quantity=3, unit_price=100,
+                                    delivered_at=delivered_at if snapshot_dates else None, returned_at=returned_at if snapshot_dates else None)
+    for quantity, dated in delivery_events:
+        shipment = Shipment.objects.create(order=order, state="delivered", dispatched_at=None, delivered_at=delivered_at if dated else None)
+        ShipmentLine.objects.create(shipment=shipment, order_line=line, quantity=quantity)
+    for quantity, dated in return_events:
+        case = ReturnRequest.objects.create(order=order, status="inspected", reason="quality", inspected_at=returned_at if dated else None)
+        ReturnLine.objects.create(return_request=case, order_line=line, quantity=quantity, accepted_quantity=quantity)
+    filters = filters_from_params({"start": "2030-01-01", "end": "2030-01-31", "product_ids": str(reference_data.id)})
+    result = reporting_coverage(filters)
+    assert result["missing_delivery_date_units"] == missing_delivery
+    assert result["missing_return_date_units"] == missing_return
 
 
 def test_superseded_history_is_excluded_from_every_report_without_deleting_evidence(reference_data):

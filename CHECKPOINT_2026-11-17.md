@@ -1,4 +1,6 @@
-# ProductStat checkpoint — STOPPED, 17 November 2026
+# Historical ProductStat checkpoint — 17 November 2026
+
+**Superseded:** the user explicitly resumed after this checkpoint. The remaining implementation and local verification are recorded in [the release status](docs/RELEASE_STATUS.md) and [validation evidence](docs/VALIDATION.md). The stop instructions below are preserved as historical context, not the current work status.
 
 **Latest instruction: stop.** Saved at approximately **12:25 Asia/Dhaka** after a renewed explicit stop request. Do not resume implementation, tests, deployment or scheduling without a new user instruction. The earlier Continue at12:05 is superseded by this later stop.
 

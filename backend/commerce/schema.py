@@ -51,6 +51,7 @@ class Refund(s.Serializer):
 class Order(s.Serializer):
     id=s.UUIDField();number=s.CharField();status=s.CharField();payment_method=s.CharField();customer_name=s.CharField();email=s.CharField();phone=s.CharField();address=Address();subtotal=Money();discount_total=Money();shipping_total=Money();tax_total=Money();grand_total=Money();collected_total=Money();refunded_total=Money();created_at=s.DateTimeField(allow_null=True);confirmed_at=s.DateTimeField(allow_null=True);dispatched_at=s.DateTimeField(allow_null=True);delivered_at=s.DateTimeField(allow_null=True);reservation_expires_at=s.DateTimeField(allow_null=True);is_historical=s.BooleanField();is_current=s.BooleanField();supersedes_id=s.UUIDField(allow_null=True);source=s.CharField();lines=OrderLine(many=True);shipments=Shipment(many=True);payments=Payment(many=True);returns=Return(many=True);refunds=Refund(many=True)
     prepared_at=s.DateTimeField(allow_null=True)
+    amount_due=Money();settled_total=Money()
 class CheckoutResult(s.Serializer):
     order=Order();access_token=s.CharField();payment_url=s.URLField(allow_null=True)
 class Page(s.Serializer):

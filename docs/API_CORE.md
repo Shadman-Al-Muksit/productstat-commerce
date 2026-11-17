@@ -52,6 +52,8 @@ Order line: `{id,sku_id,sku_code,product_name,variant_name,quantity,cancelled_qu
 
 ## Preparation, tax and environment boundaries
 
+Orders expose `amount_due` as the remaining customer collection after cancelled/accepted-return allocations and confirmed receipts (zero for cancelled/failed/returned-to-origin orders), and `settled_total` as recorded courier settlements. Original `grand_total`, confirmed `collected_total` and confirmed `refunded_total` remain separate snapshots/balances. Settlement is not subtracted again from the customer's amount due.
+
 Return eligibility ends at the end of the configured calendar day in `Asia/Dhaka`: a delivery on 1 November with a seven-day window accepts requests through 8 November, including that evening, and closes at midnight on 9 November. This is independent of refund completion.
 
 `POST staff/orders/<uuid>/action/ {action:"prepare"}` moves confirmed orders to `preparing` and snapshots `prepared_at`. Dispatch accepts confirmed or preparing orders; cancellation accepts both before dispatch. Lists accept `page` and `page_size` (maximum 100) and return count/page/page_size/results.

@@ -1020,6 +1020,10 @@ export interface components {
             refunds: components["schemas"]["Refund"][];
             /** Format: date-time */
             prepared_at: string | null;
+            /** Format: decimal */
+            amount_due: string;
+            /** Format: decimal */
+            settled_total: string;
         };
         OrderAction: {
             lines?: components["schemas"]["QuantityInput"][];
@@ -1272,6 +1276,7 @@ export interface components {
             cancelled_units_without_dated_event: number;
             undated_collection_amount: string;
             undated_settlement_amount: string;
+            undated_refund_amount: string;
             basis: string;
         };
         ReportingDelivery: {
@@ -1342,6 +1347,9 @@ export interface components {
             net_delivered_value: string;
             /** Format: date */
             date: string;
+        };
+        ReportingUnavailable: {
+            detail: string;
         };
         Return: {
             /** Format: uuid */
@@ -1563,6 +1571,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalyticsResponse"];
+                };
+            };
+            /** @description An unusually long-running overview still holds the cache lease; retry after the Retry-After header delay. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportingUnavailable"];
                 };
             };
         };

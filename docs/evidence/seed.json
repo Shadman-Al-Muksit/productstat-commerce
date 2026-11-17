@@ -1,0 +1,29 @@
+{
+  "recorded_at": "2026-11-16T16:45:52.646072+00:00",
+  "synthetic_data_only": true,
+  "result": {
+    "idempotent": true,
+    "before": {
+      "orders": 25000,
+      "lines": 75000,
+      "skus": 2000,
+      "stock_movements": 2000,
+      "money": "632199690.00",
+      "stock": {
+        "on_hand": 137838,
+        "reserved": 0
+      }
+    },
+    "after": {
+      "orders": 25000,
+      "lines": 75000,
+      "skus": 2000,
+      "stock_movements": 2000,
+      "money": "632199690.00",
+      "stock": {
+        "on_hand": 137838,
+        "reserved": 0
+      }
+    }
+  }
+}

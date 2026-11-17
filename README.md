@@ -6,6 +6,10 @@ A Bangladesh e-commerce platform connecting a customer storefront, staff operati
 
 The useful question is not only “what sold?” A manager can follow a product from ordered units to delivery outcomes, accepted returns and confirmed money movements, then inspect the contributing records.
 
+![ProductStat analytics workspace showing synthetic demonstration data](docs/screenshots/analytics-desktop.png)
+
+See the [release status](docs/RELEASE_STATUS.md) and [validation evidence](docs/VALIDATION.md) for the tested scope and operating limits.
+
 ## Run locally
 
 Development and backend verification use Ubuntu WSL. Source files remain on the Windows D: drive; database files and dependencies live in the separate Linux runtime `~/.local/share/productstat`.
@@ -71,7 +75,7 @@ bash scripts/load-test.sh             # 20 browsing sessions + five staff sessio
 
 With the application running, execute `npm run test:e2e` from `frontend`. On this WSL1 machine, use Windows Node with the installed Windows Playwright Chromium; the application/database still run in WSL. Set `PLAYWRIGHT_EXECUTABLE_PATH` if a browser location must be supplied.
 
-Verification results, environment limits and release prerequisites belong in [the validation record](docs/VALIDATION.md). The latest two-minute candidate benchmark passed response checks and the catalogue latency target, but missed the analytics p95 target; optimization and retesting are in progress. A successful local demonstration is not evidence of a hosted production deployment.
+The final local checks passed: **136 backend tests, five browser journeys, dependency advisory checks and encrypted recovery**. The two-minute 25-user API run completed 2,767 requests without errors, with catalogue p95 **79 ms** and analytics p95 **1.956 s**. The [validation record](docs/VALIDATION.md) includes failed earlier candidates, cold-request maxima, cache conditions and deployment limits. A successful local demonstration is not evidence of a hosted production deployment.
 
 ## Deployment boundary
 

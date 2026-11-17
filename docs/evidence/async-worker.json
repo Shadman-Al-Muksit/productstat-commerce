@@ -1,0 +1,107 @@
+{
+  "recorded_at": "2026-11-17T07:47:04.700371+00:00",
+  "synthetic_data_only": true,
+  "result": {
+    "status": "passed",
+    "real_worker": true,
+    "batches": [
+      {
+        "id": "bf70f9f5-cf2b-4769-97d2-eca0026ed550",
+        "kind": "adjustments",
+        "status": "completed",
+        "source_name": "verification-async-1328ad55b0",
+        "result": {
+          "created": 1,
+          "skipped": 0,
+          "updated": 0
+        },
+        "total_rows": 1,
+        "valid_rows": 1,
+        "error_rows": 0
+      },
+      {
+        "id": "0b488299-f069-43f2-aaab-2079bcd5e32c",
+        "kind": "adjustments",
+        "status": "completed",
+        "source_name": "verification-async-1328ad55b0",
+        "result": {
+          "created": 0,
+          "skipped": 1,
+          "updated": 0
+        },
+        "total_rows": 1,
+        "valid_rows": 1,
+        "error_rows": 0
+      },
+      {
+        "id": "9f0c5b4e-9012-4a10-91b7-b8b7f95a5df5",
+        "kind": "adjustments",
+        "status": "completed",
+        "source_name": "verification-async-1328ad55b0",
+        "result": {
+          "created": 1,
+          "skipped": 0,
+          "updated": 0
+        },
+        "total_rows": 1,
+        "valid_rows": 1,
+        "error_rows": 0
+      }
+    ],
+    "workers": [
+      {
+        "pid": 14750,
+        "started_at": "2026-11-17T07:46:54.961112+00:00",
+        "stopped": true,
+        "exit_code": 0
+      },
+      {
+        "pid": 14759,
+        "started_at": "2026-11-17T07:47:00.668376+00:00",
+        "stopped": true,
+        "exit_code": 0
+      }
+    ],
+    "sku": "FRM-00002",
+    "baseline": {
+      "on_hand": 46,
+      "reserved": 0,
+      "available": 46
+    },
+    "queued_before_worker": "queued",
+    "after_first": {
+      "on_hand": 47,
+      "reserved": 0,
+      "available": 47
+    },
+    "after_repeat": {
+      "on_hand": 47,
+      "reserved": 0,
+      "available": 47
+    },
+    "worker_restart": {
+      "queued_batch_id": "9f0c5b4e-9012-4a10-91b7-b8b7f95a5df5",
+      "status_while_stopped": "queued",
+      "durable_pending_event": true,
+      "status_after_restart": "completed"
+    },
+    "final": {
+      "on_hand": 46,
+      "reserved": 0,
+      "available": 46
+    },
+    "stock_movements": [
+      {
+        "id": "732934d5-51d9-401f-a9bb-281819f14395",
+        "reference": "csv:verification-async-1328ad55b0:increase-once",
+        "on_hand_delta": 1
+      },
+      {
+        "id": "4753cfd3-5565-4dca-a616-d534059a7cdc",
+        "reference": "csv:verification-async-1328ad55b0:cleanup-once",
+        "on_hand_delta": -1
+      }
+    ],
+    "recorded_at": "2026-11-17T07:47:04.699784+00:00"
+  }
+}

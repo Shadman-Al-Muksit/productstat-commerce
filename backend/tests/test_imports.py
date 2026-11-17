@@ -10,7 +10,7 @@ from django.db import OperationalError
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from commerce.imports import SCHEMAS, commit_batch, stage_upload, validate_batch
+from commerce.imports import ImportConflict, SCHEMAS, commit_batch, stage_upload, validate_batch
 from commerce.models import AuditEvent, ImportBatch, Order, OrderLine, OutboxEvent, Payment, PaymentSettlement, Product, Refund, ReturnRequest, Shipment, SKU, StockMovement
 from commerce.tasks import deliver_outbox
 
@@ -455,3 +455,57 @@ def test_live_order_cannot_be_revised_as_history(import_data, settings, tmp_path
     preview = client.get(f"/api/v1/imports/{batch.id}/correction-preview/")
     assert preview.status_code == 400 and "live orders" in str(preview.json())
     assert Order.objects.count() == 1 and Order.objects.get().is_current is True
+
+
+@pytest.mark.parametrize("status", ["queued", "validating"])
+def test_correction_cannot_be_approved_before_validation_finishes(import_data, settings, tmp_path, status):
+    settings.MEDIA_ROOT = tmp_path
+    _, actor = import_data
+    assert commit_batch(correction_batch(actor, history_row()).id).status == "completed"
+    batch = stage_upload(kind="history", source_name="reviewed", files=[upload("history", [history_row(unit_price="110")])], actor=actor)
+    ImportBatch.objects.filter(pk=batch.pk).update(status=status)
+    client = APIClient()
+    client.force_authenticate(actor)
+    preview = client.get(f"/api/v1/imports/{batch.id}/correction-preview/")
+    assert preview.status_code == 200
+    assert preview.json()["can_correct"] is False
+    response = client.post(f"/api/v1/imports/{batch.id}/correct/", {
+        "reason": "Reviewed proposal must wait for active validation", "expected_revisions": preview.json()["expected_revisions"]}, format="json")
+    assert response.status_code == 400 and "validation to finish" in str(response.json())
+    batch.refresh_from_db()
+    assert batch.status == status
+    assert not AuditEvent.objects.filter(event="historical_correction_requested").exists()
+    assert not OutboxEvent.objects.filter(kind="import_commit").exists()
+    assert Order.objects.get(is_current=True).grand_total == 200
+
+
+def test_late_validator_cannot_overwrite_durable_approved_correction(import_data, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    _, actor = import_data
+    assert commit_batch(correction_batch(actor, history_row()).id).status == "completed"
+    batch = stage_upload(kind="history", source_name="reviewed", files=[upload("history", [history_row(unit_price="110")])], actor=actor)
+    client = APIClient()
+    client.force_authenticate(actor)
+
+    def approve_after_another_validator_finished(*args, **kwargs):
+        # Deterministically interleave a second validator's completed result and
+        # real administrator approval before this validator attempts its save.
+        ImportBatch.objects.filter(pk=batch.pk).update(status="failed", error_rows=1)
+        preview = client.get(f"/api/v1/imports/{batch.id}/correction-preview/").json()
+        assert preview["can_correct"] is True
+        response = client.post(f"/api/v1/imports/{batch.id}/correct/", {
+            "reason": "Administrator reviewed the winning validation result", "expected_revisions": preview["expected_revisions"]}, format="json")
+        assert response.status_code == 202
+        raise ImportConflict("The stale validator independently found the same conflict.")
+
+    with patch("commerce.imports._check_repeat_conflicts", side_effect=approve_after_another_validator_finished):
+        result = validate_batch(batch.id)
+    assert result.status == "committing"
+    assert result.result["_correction"]["reviewer_id"] == actor.id
+    assert OutboxEvent.objects.filter(kind="import_commit", payload__batch_id=str(batch.id), status="pending").exists()
+    completed = commit_batch(batch.id)
+    assert completed.status == "completed" and completed.result["revised"] == 1
+    assert Order.objects.get(is_current=True).grand_total == 220
+    # Re-delivering a validation job after completion is also harmless.
+    assert validate_batch(batch.id).status == "completed"
+    assert Order.objects.count() == 2

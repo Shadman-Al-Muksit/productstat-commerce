@@ -71,6 +71,34 @@ def test_partial_cancellation_cod_collection_and_settlement(catalog,payload,admi
     with pytest.raises(ValidationError): services.order_action(order.id,'settle_cod',{'amount':'100.00','reference':'bank-2'},admin)
     sku=catalog[2];sku.refresh_from_db();assert sku.on_hand==8 and sku.reserved==0
 
+def test_api_amount_due_and_settled_balance_after_partial_cancellation(catalog,payload,admin):
+    order=place(catalog,payload);line=order.lines.get()
+    services.cancel_order(order.id,admin,[{'order_line_id':str(line.id),'quantity':1}]);deliver(order,admin)
+    client=APIClient();client.force_authenticate(admin)
+    detail=client.get(f'/api/v1/staff/orders/{order.id}/').json()
+    assert detail['grand_total']=='3090.00' and detail['amount_due']=='2090.00'
+    assert Decimal(detail['collected_total'])==0 and detail['settled_total']=='0.00'
+    services.order_action(order.id,'collect_cod',{'amount':'2090','reference':'courier-collected'},admin)
+    services.order_action(order.id,'settle_cod',{'amount':'1000','reference':'bank-partial'},admin)
+    detail=client.get(f'/api/v1/staff/orders/{order.id}/').json()
+    assert detail['amount_due']=='0.00' and detail['collected_total']=='2090.00'
+    assert detail['settled_total']=='1000.00' and Decimal(detail['refunded_total'])==0
+
+def test_authenticated_user_cannot_bypass_login_ip_throttle():
+    user=User.objects.create_user(username='authenticated-attacker',role='customer')
+    client=APIClient();client.force_authenticate(user)
+    with patch('commerce.views.authenticate',return_value=None):
+        responses=[client.post('/api/v1/auth/login/',{'username':'administrator','password':'incorrect'},format='json') for _ in range(11)]
+    assert all(response.status_code==400 for response in responses[:10])
+    assert responses[10].status_code==429
+
+def test_authenticated_checkout_throttle_uses_stable_user_identity():
+    user=User.objects.create_user(username='checkout-limiter',role='customer')
+    client=APIClient();client.force_authenticate(user)
+    responses=[client.post('/api/v1/checkout/',{},format='json',REMOTE_ADDR=f'198.51.100.{number+1}') for number in range(21)]
+    assert all(response.status_code==400 for response in responses[:20])
+    assert responses[20].status_code==429
+
 def test_partial_settlements_keep_original_dates_and_references(catalog,payload,admin):
     from commerce.reporting import cash_activity
     from django.utils import timezone as clock

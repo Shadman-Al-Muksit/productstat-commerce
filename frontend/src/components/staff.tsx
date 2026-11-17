@@ -582,7 +582,7 @@ function OrderDrawer({
   const [fields, setFields] = useState<Row>({
     carrier: "Demo courier",
     tracking_number: "",
-    amount: order.grand_total,
+    amount: "",
     reference: "",
   });
   const [cancelQuantities, setCancelQuantities] = useState<
@@ -653,6 +653,9 @@ function OrderDrawer({
         <div>
           <small>Total</small>
           <strong>{money(o.grand_total)}</strong>
+          <p>Remaining amount due: {money(o.amount_due)}</p>
+          <p>Collection confirmed: {money(o.collected_total)}</p>
+          <p>Courier settlement received: {money(o.settled_total)}</p>
           <p>
             <DateText value={o.created_at} />
           </p>

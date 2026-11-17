@@ -545,7 +545,7 @@ def correction_preview(batch):
         orders.append({"external_id": external_id, "action": action, "current_order_id": str(old.id) if old else None,
                        "before_fingerprint": old.import_fingerprint if old else None, "after_fingerprint": fingerprint,
                        "before": _existing_summary(old) if old else None, "after": _proposed_summary(rows)})
-    return {"batch_id": str(batch.id), "source_name": batch.source_name, "can_correct": bool(expected) and batch.status not in {"completed", "committing"},
+    return {"batch_id": str(batch.id), "source_name": batch.source_name, "can_correct": bool(expected) and batch.status in {"ready", "failed"},
             "orders": orders, "expected_revisions": expected, "conflicts_count": len(expected)}
 
 
@@ -553,6 +553,8 @@ def prepare_correction(batch, actor, reason, expected_revisions):
     """Validate an administrator's reviewed proposal before durable worker dispatch."""
     if not actor.is_active or not (actor.is_superuser or actor.role == "administrator"):
         raise ImportProblem("Only an active administrator can approve historical corrections.")
+    if batch.status not in {"ready", "failed"}:
+        raise ImportProblem("Wait for validation to finish before approving a historical correction.")
     reason = str(reason or "").strip()
     if len(reason) < 10 or len(reason) > 1000:
         raise ImportProblem("A correction reason of 10–1,000 characters is required.")
@@ -577,7 +579,10 @@ def validate_batch(batch_id):
     batch = ImportBatch.objects.get(pk=batch_id)
     if batch.status not in {"queued", "validating"}:
         return batch
-    ImportBatch.objects.filter(pk=batch_id).update(status="validating", progress=5)
+    # A delayed worker must not reclaim a batch already approved or completed.
+    claimed = ImportBatch.objects.filter(pk=batch_id, status__in=["queued", "validating"]).update(status="validating", progress=5)
+    if not claimed:
+        return ImportBatch.objects.get(pk=batch_id)
     try:
         datasets = read_datasets(batch)
         records = normalize_history(datasets) if batch.kind == "history" else datasets[batch.kind]
@@ -613,7 +618,7 @@ def validate_batch(batch_id):
             except (ImportProblem, InvalidOperation) as exc:
                 errors.append({"row": record.get("_row"), "file": record.get("_schema"), "message": str(exc)})
             if index and index % 1000 == 0:
-                ImportBatch.objects.filter(pk=batch_id).update(progress=5 + int(90 * index / len(records)))
+                ImportBatch.objects.filter(pk=batch_id, status="validating").update(progress=5 + int(90 * index / len(records)))
         if batch.kind == "history" and not errors:
             try:
                 validate_history_consistency(records)
@@ -640,13 +645,17 @@ def validate_batch(batch_id):
         batch.preview = [{key: value for key, value in record.items() if not key.startswith("_")} for record in records[:10]]
         batch.status = "failed" if errors else "ready"
         batch.progress = 100
-        batch.save()
+        # Another validator may already have finished and an administrator may
+        # have approved a correction. Never overwrite that newer state/result.
+        ImportBatch.objects.filter(pk=batch_id, status="validating").update(
+            total_rows=batch.total_rows, error_rows=batch.error_rows, valid_rows=batch.valid_rows,
+            errors=batch.errors, preview=batch.preview, status=batch.status, progress=batch.progress)
     except (ImportProblem, InvalidOperation, IntegrityError) as exc:
         batch.status = "failed"
         batch.errors = [{"row": None, "message": str(exc)[:1000]}]
         batch.progress = 100
-        batch.save(update_fields=["status", "errors", "progress"])
-    return batch
+        ImportBatch.objects.filter(pk=batch_id, status="validating").update(status=batch.status, errors=batch.errors, progress=batch.progress)
+    return ImportBatch.objects.get(pk=batch_id)
 
 
 def _create_history_order(source, external_id, rows, *, fingerprint="", supersedes=None):

@@ -1,0 +1,93 @@
+{
+  "recorded_at": "2026-11-17T16:03:50.337444+00:00",
+  "environment": "Ubuntu WSL1 on a shared Windows host; 4 logical processors, 7.90 GiB physical RAM",
+  "scope": "API only, local PostgreSQL 17, gunicorn 4 workers/4 threads for final run; initial run preceded tuning",
+  "workload": {
+    "browsing_users": 20,
+    "staff_users": 5,
+    "think_time_seconds": 1,
+    "independent_authenticated_identities": 25,
+    "fixture_skus": 2000,
+    "fixture_historical_orders": 25000,
+    "fixture_historical_lines": 75000
+  },
+  "report_cache_seconds": 30,
+  "test_state": {
+    "isStdOutTTY": false,
+    "isStdErrTTY": false,
+    "testRunDurationMs": 121033.9933
+  },
+  "metrics": {
+    "catalog_ms": {
+      "contains": "time",
+      "values": {
+        "p(95)": 79.22021499999998,
+        "avg": 50.084183420593334,
+        "min": 25.9538,
+        "med": 38.633449999999996,
+        "max": 978.1847,
+        "p(90)": 62.13632000000001
+      },
+      "thresholds": {
+        "p(95)<1000": {
+          "ok": true
+        }
+      },
+      "type": "trend"
+    },
+    "analytics_ms": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 13.7279,
+        "med": 27.7877,
+        "max": 4079.5842,
+        "p(90)": 132.09806000000003,
+        "p(95)": 1955.6122599999999,
+        "avg": 263.19147263157896
+      },
+      "thresholds": {
+        "p(95)<2000": {
+          "ok": true
+        }
+      }
+    },
+    "http_reqs": {
+      "values": {
+        "count": 2767,
+        "rate": 22.86134601162498
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "http_req_failed": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 2767
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "fails": 0,
+        "rate": 1,
+        "passes": 2767
+      },
+      "thresholds": {
+        "rate==1": {
+          "ok": true
+        }
+      }
+    }
+  },
+  "limitations": "Short local read workload, with cold requests retained; not a production capacity guarantee or an end-to-end browser load test."
+}

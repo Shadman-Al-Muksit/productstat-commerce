@@ -25,14 +25,14 @@ function get(path, session) {
   }});
 }
 export function browse() {
-  const response = get('catalog/products/?page_size=24&page=' + ((__ITER % 4) + 1), auth.customer);
+  const response = get('catalog/products/?page_size=24&page=' + ((__ITER % 4) + 1), auth.customers[(__VU - 1) % auth.customers.length]);
   catalog.add(response.timings.duration);
   check(response, {'catalog successful': r => r.status === 200 && r.json('results').length > 0});
   sleep(1);
 }
 export function report() {
   const range = __ITER % 5 === 0 ? '?start=' + auth.start + '&end=' + auth.end : '';
-  const response = get('analytics/' + range, auth.analyst);
+  const response = get('analytics/' + range, auth.staff[(__VU - 1) % auth.staff.length]);
   analytics.add(response.timings.duration);
   check(response, {'report successful': r => r.status === 200 && r.json('summary.orders') >= 0});
   sleep(1);

@@ -34,6 +34,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/AnalyticsResponse'
           description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportingUnavailable'
+          description: An unusually long-running overview still holds the cache lease;
+            retry after the Retry-After header delay.
   /api/v1/analytics/drilldown/:
     get:
       operationId: analytics_drilldown
@@ -2302,8 +2309,17 @@ components:
           type: string
           format: date-time
           nullable: true
+        amount_due:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        settled_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
       required:
       - address
+      - amount_due
       - collected_total
       - confirmed_at
       - created_at
@@ -2326,6 +2342,7 @@ components:
       - refunds
       - reservation_expires_at
       - returns
+      - settled_total
       - shipments
       - shipping_total
       - source
@@ -2961,6 +2978,8 @@ components:
           type: string
         undated_settlement_amount:
           type: string
+        undated_refund_amount:
+          type: string
         basis:
           type: string
       required:
@@ -2970,6 +2989,7 @@ components:
       - missing_order_date_units
       - missing_return_date_units
       - undated_collection_amount
+      - undated_refund_amount
       - undated_settlement_amount
     ReportingDelivery:
       type: object
@@ -3159,6 +3179,13 @@ components:
       - refunded_amount
       - returned_units
       - returned_value
+    ReportingUnavailable:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
     Return:
       type: object
       properties:

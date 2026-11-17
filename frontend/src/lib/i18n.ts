@@ -1,4 +1,5 @@
 const bangla: Record<string, string> = {
+  "Amount due": "বকেয়া পরিমাণ",
   "Choose your variant": "ধরন বেছে নিন",
   "Currently out of stock": "বর্তমানে স্টকে নেই",
   "Currently unavailable": "বর্তমানে পাওয়া যাচ্ছে না",

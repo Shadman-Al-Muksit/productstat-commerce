@@ -180,7 +180,7 @@ test('administrator reviews and queues a historical correction without changing 
   await page.getByRole('row').filter({hasText: source}).first().getByRole('button', {name: 'history.csv', exact: true}).click();
   await page.getByRole('button', {name: 'Review historical correction', exact: true}).click();
   const review = page.getByRole('region', {name: 'Historical correction review'});
-  await expect(review.getByRole('cell', {name: 'Revise', exact: true})).toBeVisible();
+  await expect(review.getByRole('cell', {name: 'revise', exact: true})).toBeVisible();
   await review.getByLabel('Reason for historical correction').fill('Synthetic verification: source export price corrected against original record.');
   await review.getByRole('button', {name: 'Authorize historical revision', exact: true}).click();
   await expect.poll(() => status(second), {timeout: 30_000}).toBe('completed');

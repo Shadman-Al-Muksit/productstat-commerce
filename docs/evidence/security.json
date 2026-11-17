@@ -1,0 +1,15 @@
+{
+  "npm_recorded_at": "2026-11-17T15:54:15.156673+00:00",
+  "python_recorded_at": "2026-11-17T15:58:04.362760+00:00",
+  "npm_production_vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "python_reported_vulnerabilities": 0,
+  "python_audit_tool": "pip-audit 2.10.1",
+  "scope": "Public package advisory checks at the recorded times; not a penetration test or a guarantee against unknown vulnerabilities."
+}

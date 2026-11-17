@@ -109,7 +109,12 @@ class ReportingCoverage(serializers.Serializer):
     cancelled_units_without_dated_event = serializers.IntegerField()
     undated_collection_amount = serializers.CharField()
     undated_settlement_amount = serializers.CharField()
+    undated_refund_amount = serializers.CharField()
     basis = serializers.CharField()
+
+
+class ReportingUnavailable(serializers.Serializer):
+    detail = serializers.CharField()
 
 
 class AnalyticsResponse(serializers.Serializer):
@@ -186,7 +191,8 @@ FILTER_PARAMETERS = [OpenApiParameter("start", OpenApiTypes.DATE), OpenApiParame
 METRIC_PARAMETER = OpenApiParameter("metric", OpenApiTypes.STR, enum=["orders", "ordered_units", "cancelled_units", "delivered_units", "returned_units", "refunds"])
 
 
-@extend_schema(operation_id="analytics_overview", parameters=FILTER_PARAMETERS, responses=AnalyticsResponse, tags=["Analytics"])
+@extend_schema(operation_id="analytics_overview", parameters=FILTER_PARAMETERS,
+               responses={200: AnalyticsResponse, 503: OpenApiResponse(ReportingUnavailable, description="An unusually long-running overview still holds the cache lease; retry after the Retry-After header delay.")}, tags=["Analytics"])
 @api_view(["GET"])
 @permission_classes([IsStaffReader])
 def overview(request):

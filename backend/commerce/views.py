@@ -21,8 +21,14 @@ from . import payments,services
 
 class LoginThrottle(AnonRateThrottle):
     scope='login'
+    def get_cache_key(self,request,view):
+        # An authenticated customer must not bypass account-guessing protection.
+        return self.cache_format % {'scope':self.scope,'ident':self.get_ident(request)}
 class CheckoutThrottle(AnonRateThrottle):
     scope='checkout'
+    def get_cache_key(self,request,view):
+        identity='user:'+str(request.user.pk) if request.user.is_authenticated else 'ip:'+self.get_ident(request)
+        return self.cache_format % {'scope':self.scope,'ident':identity}
 
 def dt(value): return value.isoformat() if value else None
 def user_data(user): return UserSerializer(user).data if user.is_authenticated else None
@@ -34,14 +40,20 @@ def refund_data(item):
     return {'id':str(item.id),'order_id':str(item.order_id),'order_number':item.order.number,'amount':str(item.amount),'status':item.status,'reason':item.reason,'reference':item.reference,'created_at':dt(item.created_at),'confirmed_at':dt(item.confirmed_at)}
 
 def order_data(order):
-    cash=sum((payment.amount for payment in order.payments.all() if payment.status in ['successful','exception']),Decimal('0'))
+    payment_rows=list(order.payments.all())
+    order_lines=list(order.lines.all())
+    cash=sum((payment.amount for payment in payment_rows if payment.status in ['successful','exception']),Decimal('0'))
     refunds=sum((refund.amount for refund in order.refunds.all() if refund.status=='confirmed'),Decimal('0'))
+    reductions=sum((sum(services.line_allocation(line,line.cancelled_quantity+line.returned_quantity)[1:]) for line in order_lines),Decimal('0'))
+    amount_due=max(Decimal('0'),order.grand_total-reductions-cash) if order.status not in ['cancelled','failed','returned_to_origin'] else Decimal('0')
     result={'id':str(order.id),'number':order.number,'status':order.status,'payment_method':order.payment_method,'customer_name':order.customer_name,'email':order.email,'phone':order.phone,'address':order.address,'is_historical':order.is_historical,'is_current':order.is_current,'supersedes_id':str(order.supersedes_id) if order.supersedes_id else None,'source':order.source}
     for field in ['subtotal','discount_total','shipping_total','tax_total','grand_total']:
         result[field]=str(getattr(order,field))
     for field in ['created_at','confirmed_at','prepared_at','dispatched_at','delivered_at','reservation_expires_at']:
         result[field]=dt(getattr(order,field))
     result['collected_total']=str(cash);result['refunded_total']=str(refunds)
+    result['amount_due']=str(amount_due.quantize(Decimal('.01')))
+    result['settled_total']=str(sum((payment.settled_amount for payment in payment_rows),Decimal('0.00')))
     result['lines']=[{'id':str(line.id),'sku_id':str(line.sku_id) if line.sku_id else None,'sku_code':line.sku_code,'product_name':line.product_name,'variant_name':line.variant_name,'quantity':line.quantity,'cancelled_quantity':line.cancelled_quantity,'shipped_quantity':line.shipped_quantity,'delivered_quantity':line.delivered_quantity,'returned_quantity':line.returned_quantity,'unit_price':str(line.unit_price),'discount_total':str(line.discount_total),'tax_total':str(line.tax_total),'line_total':str(line.unit_price*line.quantity-line.discount_total)} for line in order.lines.all()]
     result['shipments']=[{'id':str(shipment.id),'state':shipment.state,'carrier':shipment.carrier,'tracking_number':shipment.tracking_number,'dispatched_at':dt(shipment.dispatched_at),'delivered_at':dt(shipment.delivered_at)} for shipment in order.shipments.all()]
     result['payments']=[{'id':str(payment.id),'method':payment.method,'status':payment.status,'amount':str(payment.amount),'settled_amount':str(payment.settled_amount),'is_sandbox':payment.is_sandbox,'collected_at':dt(payment.collected_at),'settled_at':dt(payment.settled_at)} for payment in order.payments.all()]

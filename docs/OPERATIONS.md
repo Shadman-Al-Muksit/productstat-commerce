@@ -57,6 +57,8 @@ The draft systemd service/timer targets a checkout at `/srv/productstat` with a 
 
 ## Failures and maintenance
 
+After a large initial load, restoration or a migration that adds populated filtering columns, run `bash scripts/analyze.sh` against the intended database. It refreshes PostgreSQL planner statistics without changing business rows. Keep autovacuum/analyze enabled. The final local load measurement uses refreshed statistics after the history-revision migration; the backup restore check still verifies captured business totals separately.
+
 The protected `GET /api/v1/staff/operations-health/` endpoint gives administrators/operators uncached, redacted attention counts and up to 20 contributing references per category. It flags confirmed/preparing COD orders at least 48 hours old without cancelling them, failed imports, outbox work exhausted at eight attempts, and captured payment exceptions not covered by confirmed refunds. A worker crash on its eighth attempt is flagged after its five-minute lease expires. Analyst/customer accounts cannot access the endpoint; responses contain no customer names, contacts, addresses, file names or raw exception messages.
 
 For local or container monitoring, run:

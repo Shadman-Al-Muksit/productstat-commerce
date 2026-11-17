@@ -1277,6 +1277,10 @@ export function OrderPage({ id }: { id: string }) {
             <span>{t("Payment")}</span>
             <Badge value={o.payment_method} />
           </div>
+          <div>
+            <span>{t("Amount due")}</span>
+            <strong>{money(o.amount_due)}</strong>
+          </div>
           {token && (
             <div className="tracking-save">
               <LockKeyhole size={17} />

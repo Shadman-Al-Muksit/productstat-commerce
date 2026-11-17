@@ -1,0 +1,82 @@
+{
+  "recorded_at": "2026-11-17T16:05:11.329737+00:00",
+  "synthetic_data_only": true,
+  "result": {
+    "source": "productstat",
+    "matches": true,
+    "private_files_verified": 13,
+    "elapsed_seconds": 5.88,
+    "expected": {
+      "orders": [
+        "25016",
+        "632268100.00"
+      ],
+      "lines": [
+        "75016",
+        "150047",
+        "128628",
+        "4107"
+      ],
+      "inventory": [
+        "2000",
+        "137833",
+        "1"
+      ],
+      "payments": [
+        "21427",
+        "541806600.00",
+        "476339860.00"
+      ],
+      "refunds": [
+        "4107",
+        "17437880.00"
+      ],
+      "settlements": [
+        "18848",
+        "476339860.00"
+      ],
+      "order_revisions": [
+        "25014",
+        "2",
+        "2"
+      ]
+    },
+    "restored": {
+      "orders": [
+        "25016",
+        "632268100.00"
+      ],
+      "lines": [
+        "75016",
+        "150047",
+        "128628",
+        "4107"
+      ],
+      "inventory": [
+        "2000",
+        "137833",
+        "1"
+      ],
+      "payments": [
+        "21427",
+        "541806600.00",
+        "476339860.00"
+      ],
+      "refunds": [
+        "4107",
+        "17437880.00"
+      ],
+      "settlements": [
+        "18848",
+        "476339860.00"
+      ],
+      "order_revisions": [
+        "25014",
+        "2",
+        "2"
+      ]
+    },
+    "backup_sha256": "d7fc3f432ae168570c1cbef8e91426b632d7ca37816b4f880dfa7e9552dfd862",
+    "isolated_target": "productstat_restore_c9251be06b5d"
+  }
+}

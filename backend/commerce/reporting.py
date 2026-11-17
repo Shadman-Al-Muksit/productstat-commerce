@@ -11,6 +11,7 @@ from django.db.models import Sum
 from django.db.models.functions import Cast, Coalesce
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, ValidationError
+from .reporting_money import allocate_events, money as format_money, prorate
 
 TZ = ZoneInfo("Asia/Dhaka")
 ZERO = Decimal("0")
@@ -19,7 +20,7 @@ METRICS = {"orders", "ordered_units", "cancelled_units", "delivered_units", "ret
 
 
 def money(value):
-    return str(Decimal(value).quantize(Decimal("0.01")))
+    return format_money(value)
 
 
 def filters_from_params(params):
@@ -77,6 +78,7 @@ def _line_rows(filters, earliest=None):
     query |= Q(delivered_at__gte=lo, delivered_at__lt=hi)
     query |= Q(returned_at__gte=lo, returned_at__lt=hi)
     query |= Q(shipment_lines__shipment__delivered_at__gte=lo, shipment_lines__shipment__delivered_at__lt=hi)
+    query |= Q(shipment_lines__shipment__state="delivered", shipment_lines__shipment__completed_at__gte=lo, shipment_lines__shipment__completed_at__lt=hi)
     query |= Q(return_lines__return_request__inspected_at__gte=lo, return_lines__return_request__inspected_at__lt=hi)
     # Include old order lines refunded in the requested activity interval.
     RefundLine = apps.get_model("commerce", "RefundLine")
@@ -98,19 +100,20 @@ def _line_rows(filters, earliest=None):
     ReturnLine = apps.get_model("commerce", "ReturnLine")
     for event in ShipmentLine.objects.filter(order_line_id__in=indexed, shipment__state="delivered").values("id", "order_line_id", "quantity", "shipment__delivered_at", "shipment__completed_at"):
         timestamp = event["shipment__delivered_at"] or event["shipment__completed_at"]
-        if timestamp:
-            deliveries[event["order_line_id"]].append((str(event["id"]), timestamp, event["quantity"]))
+        deliveries[event["order_line_id"]].append((str(event["id"]), timestamp, event["quantity"]))
     for event in ReturnLine.objects.filter(order_line_id__in=indexed, return_request__status="inspected", accepted_quantity__gt=0).values("id", "order_line_id", "accepted_quantity", "return_request__inspected_at"):
-        if event["return_request__inspected_at"]:
-            returns[event["order_line_id"]].append((str(event["id"]), event["return_request__inspected_at"], event["accepted_quantity"]))
+        returns[event["order_line_id"]].append((str(event["id"]), event["return_request__inspected_at"], event["accepted_quantity"]))
     for row in rows:
-        row["_deliveries"] = sorted(deliveries[row["id"]], key=lambda item: item[1])
-        row["_returns"] = sorted(returns[row["id"]], key=lambda item: item[1])
+        row["_deliveries"] = sorted(deliveries[row["id"]], key=lambda item: (item[1] is None, item[1], item[0]))
+        row["_returns"] = sorted(returns[row["id"]], key=lambda item: (item[1] is None, item[1], item[0]))
         # Snapshot fallback supports legacy rows; new imports/live operations create event records.
-        if not row["_deliveries"] and row["delivered_quantity"] and row["delivered_at"]:
+        if not any(event[1] for event in row["_deliveries"]) and row["delivered_quantity"] and row["delivered_at"]:
             row["_deliveries"] = [(str(row["id"]), row["delivered_at"], row["delivered_quantity"])]
-        if not row["_returns"] and row["returned_quantity"] and row["returned_at"]:
+        if not any(event[1] for event in row["_returns"]) and row["returned_quantity"] and row["returned_at"]:
             row["_returns"] = [(str(row["id"]), row["returned_at"], row["returned_quantity"])]
+        total = row["unit_price"] * row["quantity"] - row["discount_total"]
+        row["_delivery_values"] = allocate_events(total, row["quantity"], row["cancelled_quantity"], row["_deliveries"])
+        row["_return_values"] = allocate_events(total, row["quantity"], row["cancelled_quantity"], row["_returns"])
     return rows
 
 
@@ -162,15 +165,57 @@ def analytics(filters):
     lo, hi = bounds(previous_start, filters["end"])
     split, _ = bounds(filters["start"], filters["end"])
     sql = """
-        WITH cfg AS (SELECT %s::timestamptz lo, %s::timestamptz hi,
+        WITH cfg AS NOT MATERIALIZED (SELECT %s::timestamptz lo, %s::timestamptz hi,
                             %s::timestamptz split, %s::uuid[] products),
-        events AS (
-          SELECT o.created_at event_at, s.product_id, 'ordered' kind,
-                 l.quantity units, l.unit_price*l.quantity-l.discount_total value
-            FROM commerce_orderline l JOIN commerce_order o ON o.id=l.order_id
+        selected_lines AS MATERIALIZED (
+          SELECT l.id,l.order_id,s.product_id,o.created_at order_created_at,l.quantity,l.cancelled_quantity,
+                 l.delivered_quantity,l.returned_quantity,l.delivered_at,l.returned_at,l.unit_price,l.discount_total
+            FROM commerce_orderline l JOIN commerce_order o ON o.id=l.order_id AND o.is_current
             LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
-           WHERE o.is_current AND o.created_at>=cfg.lo AND o.created_at<cfg.hi
-             AND (cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products))
+           WHERE cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products)
+        ), dated_deliveries AS MATERIALIZED (
+          SELECT sl.order_line_id,sl.quantity,COALESCE(sh.delivered_at,sh.completed_at) event_at
+            FROM commerce_shipmentline sl JOIN commerce_shipment sh ON sh.id=sl.shipment_id
+           WHERE sh.state='delivered' AND COALESCE(sh.delivered_at,sh.completed_at) IS NOT NULL
+        ), dated_returns AS MATERIALIZED (
+          SELECT rl.order_line_id,rl.accepted_quantity,r.inspected_at event_at
+            FROM commerce_returnline rl JOIN commerce_returnrequest r ON r.id=rl.return_request_id
+           WHERE r.status='inspected' AND rl.accepted_quantity>0 AND r.inspected_at IS NOT NULL
+        ), fractional_lines AS MATERIALIZED (
+          SELECT l.* FROM selected_lines l
+           WHERE l.discount_total>0 AND MOD((l.unit_price*l.quantity-l.discount_total)*100,l.quantity)<>0
+        ), fractional_events AS (
+          SELECT f.id line_id,sl.id::text event_id,COALESCE(sh.delivered_at,sh.completed_at) event_at,f.product_id,
+                 'delivered' kind,sl.quantity units,f.quantity ordered_qty,f.cancelled_quantity base_qty,f.unit_price*f.quantity-f.discount_total total_value
+            FROM fractional_lines f JOIN commerce_shipmentline sl ON sl.order_line_id=f.id JOIN commerce_shipment sh ON sh.id=sl.shipment_id
+           WHERE sh.state='delivered' AND (COALESCE(sh.delivered_at,sh.completed_at) IS NOT NULL OR f.delivered_at IS NULL
+             OR EXISTS (SELECT 1 FROM commerce_shipmentline sx JOIN commerce_shipment hx ON hx.id=sx.shipment_id
+                         WHERE sx.order_line_id=f.id AND hx.state='delivered' AND COALESCE(hx.delivered_at,hx.completed_at) IS NOT NULL))
+          UNION ALL
+          SELECT f.id,f.id::text,f.delivered_at,f.product_id,'delivered',f.delivered_quantity,f.quantity,f.cancelled_quantity,f.unit_price*f.quantity-f.discount_total
+            FROM fractional_lines f WHERE f.delivered_quantity>0 AND f.delivered_at IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM commerce_shipmentline sl JOIN commerce_shipment sh ON sh.id=sl.shipment_id
+                              WHERE sl.order_line_id=f.id AND sh.state='delivered' AND COALESCE(sh.delivered_at,sh.completed_at) IS NOT NULL)
+          UNION ALL
+          SELECT f.id,rl.id::text,r.inspected_at,f.product_id,'returned',rl.accepted_quantity,f.quantity,f.cancelled_quantity,f.unit_price*f.quantity-f.discount_total
+            FROM fractional_lines f JOIN commerce_returnline rl ON rl.order_line_id=f.id JOIN commerce_returnrequest r ON r.id=rl.return_request_id
+           WHERE r.status='inspected' AND rl.accepted_quantity>0 AND (r.inspected_at IS NOT NULL OR f.returned_at IS NULL
+             OR EXISTS (SELECT 1 FROM commerce_returnline rx JOIN commerce_returnrequest hx ON hx.id=rx.return_request_id
+                         WHERE rx.order_line_id=f.id AND hx.status='inspected' AND rx.accepted_quantity>0 AND hx.inspected_at IS NOT NULL))
+          UNION ALL
+          SELECT f.id,f.id::text,f.returned_at,f.product_id,'returned',f.returned_quantity,f.quantity,f.cancelled_quantity,f.unit_price*f.quantity-f.discount_total
+            FROM fractional_lines f WHERE f.returned_quantity>0 AND f.returned_at IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM commerce_returnline rl JOIN commerce_returnrequest r ON r.id=rl.return_request_id
+                              WHERE rl.order_line_id=f.id AND r.status='inspected' AND rl.accepted_quantity>0 AND r.inspected_at IS NOT NULL)
+        ), fractional_sequenced AS (
+          SELECT fractional_events.*,SUM(units) OVER (PARTITION BY line_id,kind ORDER BY event_at NULLS LAST,event_id ROWS UNBOUNDED PRECEDING) cumulative_qty
+            FROM fractional_events
+        ),
+        events AS (
+          SELECT l.order_created_at event_at, l.product_id, 'ordered' kind,
+                 l.quantity units, l.unit_price*l.quantity-l.discount_total value
+            FROM selected_lines l CROSS JOIN cfg
+           WHERE l.order_created_at>=cfg.lo AND l.order_created_at<cfg.hi
           UNION ALL
           SELECT m.created_at,s.product_id,'cancelled',-m.reserved_delta,0
             FROM commerce_stockmovement m JOIN commerce_sku s ON s.id=m.sku_id
@@ -179,48 +224,41 @@ def analytics(filters):
              AND m.created_at>=cfg.lo AND m.created_at<cfg.hi
              AND (cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products))
           UNION ALL
-          SELECT COALESCE(sh.delivered_at,sh.completed_at), s.product_id,'delivered',
-                 sl.quantity,(l.unit_price-l.discount_total/l.quantity)*sl.quantity
-            FROM commerce_shipmentline sl JOIN commerce_shipment sh ON sh.id=sl.shipment_id
-            JOIN commerce_orderline l ON l.id=sl.order_line_id
-            JOIN commerce_order o ON o.id=l.order_id AND o.is_current
-            LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
-           WHERE sh.state='delivered' AND COALESCE(sh.delivered_at,sh.completed_at)>=cfg.lo
-             AND COALESCE(sh.delivered_at,sh.completed_at)<cfg.hi
-             AND (cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products))
+          SELECT d.event_at, l.product_id,'delivered',
+                 d.quantity,(l.unit_price-l.discount_total/l.quantity)*d.quantity
+            FROM dated_deliveries d JOIN selected_lines l ON l.id=d.order_line_id CROSS JOIN cfg
+           WHERE d.event_at>=cfg.lo AND d.event_at<cfg.hi
+             AND NOT EXISTS (SELECT 1 FROM fractional_lines f WHERE f.id=l.id)
           UNION ALL
-          SELECT l.delivered_at,s.product_id,'delivered',l.delivered_quantity,
+          SELECT l.delivered_at,l.product_id,'delivered',l.delivered_quantity,
                  (l.unit_price-l.discount_total/l.quantity)*l.delivered_quantity
-            FROM commerce_orderline l JOIN commerce_order o ON o.id=l.order_id AND o.is_current
-            LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
+            FROM selected_lines l CROSS JOIN cfg
            WHERE l.delivered_quantity>0 AND l.delivered_at>=cfg.lo AND l.delivered_at<cfg.hi
-             AND NOT EXISTS (SELECT 1 FROM commerce_shipmentline sl JOIN commerce_shipment sh ON sh.id=sl.shipment_id
-                              WHERE sl.order_line_id=l.id AND sh.state='delivered' AND COALESCE(sh.delivered_at,sh.completed_at) IS NOT NULL)
-             AND (cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products))
+             AND NOT EXISTS (SELECT 1 FROM fractional_lines f WHERE f.id=l.id)
+             AND l.id NOT IN (SELECT d.order_line_id FROM dated_deliveries d)
           UNION ALL
-          SELECT r.inspected_at,s.product_id,'returned',rl.accepted_quantity,
-                 (l.unit_price-l.discount_total/l.quantity)*rl.accepted_quantity
-            FROM commerce_returnline rl JOIN commerce_returnrequest r ON r.id=rl.return_request_id
-            JOIN commerce_orderline l ON l.id=rl.order_line_id JOIN commerce_order o ON o.id=l.order_id AND o.is_current
-            LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
-           WHERE r.status='inspected' AND rl.accepted_quantity>0 AND r.inspected_at>=cfg.lo AND r.inspected_at<cfg.hi
-             AND (cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products))
+          SELECT r.event_at,l.product_id,'returned',r.accepted_quantity,
+                 (l.unit_price-l.discount_total/l.quantity)*r.accepted_quantity
+            FROM dated_returns r JOIN selected_lines l ON l.id=r.order_line_id CROSS JOIN cfg
+           WHERE r.event_at>=cfg.lo AND r.event_at<cfg.hi
+             AND NOT EXISTS (SELECT 1 FROM fractional_lines f WHERE f.id=l.id)
           UNION ALL
-          SELECT l.returned_at,s.product_id,'returned',l.returned_quantity,
+          SELECT l.returned_at,l.product_id,'returned',l.returned_quantity,
                  (l.unit_price-l.discount_total/l.quantity)*l.returned_quantity
-            FROM commerce_orderline l JOIN commerce_order o ON o.id=l.order_id AND o.is_current
-            LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
+            FROM selected_lines l CROSS JOIN cfg
            WHERE l.returned_quantity>0 AND l.returned_at>=cfg.lo AND l.returned_at<cfg.hi
-             AND NOT EXISTS (SELECT 1 FROM commerce_returnline rl JOIN commerce_returnrequest r ON r.id=rl.return_request_id
-                              WHERE rl.order_line_id=l.id AND r.status='inspected' AND rl.accepted_quantity>0 AND r.inspected_at IS NOT NULL)
-             AND (cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products))
+             AND NOT EXISTS (SELECT 1 FROM fractional_lines f WHERE f.id=l.id)
+             AND l.id NOT IN (SELECT r.order_line_id FROM dated_returns r)
           UNION ALL
-          SELECT r.confirmed_at,s.product_id,'refunded',0,rl.amount-rl.tax_amount-rl.shipping_amount
+          SELECT f.event_at,f.product_id,f.kind,f.units,
+                 ROUND(f.total_value*(f.base_qty+f.cumulative_qty)/f.ordered_qty,2)
+                 -ROUND(f.total_value*(f.base_qty+f.cumulative_qty-f.units)/f.ordered_qty,2)
+            FROM fractional_sequenced f CROSS JOIN cfg WHERE f.event_at>=cfg.lo AND f.event_at<cfg.hi
+          UNION ALL
+          SELECT r.confirmed_at,l.product_id,'refunded',0,rl.amount-rl.tax_amount-rl.shipping_amount
             FROM commerce_refundline rl JOIN commerce_refund r ON r.id=rl.refund_id
-            JOIN commerce_orderline l ON l.id=rl.order_line_id JOIN commerce_order o ON o.id=r.order_id AND o.is_current
-            LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
+            JOIN selected_lines l ON l.id=rl.order_line_id JOIN commerce_order o ON o.id=r.order_id AND o.is_current CROSS JOIN cfg
            WHERE r.status='confirmed' AND r.confirmed_at>=cfg.lo AND r.confirmed_at<cfg.hi
-             AND (cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products))
         ), dated AS (
           SELECT events.*, (event_at AT TIME ZONE 'Asia/Dhaka')::date event_day,
                  CASE WHEN event_at>=cfg.split THEN 'current' ELSE 'previous' END period FROM events CROSS JOIN cfg
@@ -254,7 +292,7 @@ def analytics(filters):
     # disk spills. Count orders separately from the smaller creation-only stream;
     # the sum-only grouping above can use bounded in-memory hash aggregation.
     order_sql = """
-      WITH cfg AS (SELECT %s::timestamptz lo,%s::timestamptz hi,%s::timestamptz split,%s::uuid[] products),
+      WITH cfg AS NOT MATERIALIZED (SELECT %s::timestamptz lo,%s::timestamptz hi,%s::timestamptz split,%s::uuid[] products),
       ordered AS MATERIALIZED (
         SELECT o.id,(o.created_at AT TIME ZONE 'Asia/Dhaka')::date event_day,
                CASE WHEN o.created_at>=cfg.split THEN 'current' ELSE 'previous' END period
@@ -316,44 +354,51 @@ def delivery_cohort(filters):
     first_open_day = timezone.localdate(now, TZ) - timedelta(days=window)
     maturity = datetime.combine(first_open_day, time.min, TZ)
     sql = """
-      WITH cfg AS (SELECT %s::timestamptz lo,%s::timestamptz hi,%s::timestamptz as_of,
+      WITH cfg AS NOT MATERIALIZED (SELECT %s::timestamptz lo,%s::timestamptz hi,%s::timestamptz as_of,
                           %s::timestamptz maturity,%s::uuid[] products),
-      deliveries AS (
+      selected_lines AS MATERIALIZED (
+        SELECT l.id,l.delivered_quantity,l.delivered_at,l.returned_quantity,l.returned_at
+          FROM commerce_orderline l JOIN commerce_order o ON o.id=l.order_id AND o.is_current
+          LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
+         WHERE cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products)
+      ), dated_deliveries AS MATERIALIZED (
         SELECT sl.id::text event_id,sl.order_line_id line_id,sl.quantity qty,COALESCE(sh.delivered_at,sh.completed_at) event_at
           FROM commerce_shipmentline sl JOIN commerce_shipment sh ON sh.id=sl.shipment_id
-          JOIN commerce_orderline l ON l.id=sl.order_line_id JOIN commerce_order o ON o.id=l.order_id AND o.is_current
-          LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
-         WHERE sh.state='delivered' AND COALESCE(sh.delivered_at,sh.completed_at)<=cfg.as_of
-           AND (cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products))
+          JOIN selected_lines l ON l.id=sl.order_line_id
+         WHERE sh.state='delivered' AND COALESCE(sh.delivered_at,sh.completed_at) IS NOT NULL
+      ), deliveries AS (
+        SELECT d.* FROM dated_deliveries d CROSS JOIN cfg WHERE d.event_at<=cfg.as_of AND d.event_at<cfg.hi
         UNION ALL
-        SELECT l.id::text,l.id,l.delivered_quantity,l.delivered_at FROM commerce_orderline l JOIN commerce_order o ON o.id=l.order_id AND o.is_current
-          LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
-         WHERE l.delivered_quantity>0 AND l.delivered_at<=cfg.as_of
-           AND NOT EXISTS (SELECT 1 FROM commerce_shipmentline sl JOIN commerce_shipment sh ON sh.id=sl.shipment_id
-                            WHERE sl.order_line_id=l.id AND sh.state='delivered' AND COALESCE(sh.delivered_at,sh.completed_at) IS NOT NULL)
-           AND (cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products))
-      ), returned AS (
-        SELECT rl.order_line_id line_id,SUM(rl.accepted_quantity) qty FROM commerce_returnline rl
-          JOIN commerce_returnrequest r ON r.id=rl.return_request_id JOIN commerce_order o ON o.id=r.order_id AND o.is_current CROSS JOIN cfg
-         WHERE r.status='inspected' AND r.inspected_at<=cfg.as_of GROUP BY rl.order_line_id
-        UNION ALL
-        SELECT l.id,l.returned_quantity FROM commerce_orderline l JOIN commerce_order o ON o.id=l.order_id AND o.is_current CROSS JOIN cfg
-         WHERE l.returned_quantity>0 AND l.returned_at<=cfg.as_of
-           AND NOT EXISTS (SELECT 1 FROM commerce_returnline rl JOIN commerce_returnrequest r ON r.id=rl.return_request_id
-                            WHERE rl.order_line_id=l.id AND r.status='inspected' AND rl.accepted_quantity>0 AND r.inspected_at IS NOT NULL)
+        SELECT l.id::text,l.id,l.delivered_quantity,l.delivered_at FROM selected_lines l CROSS JOIN cfg
+         WHERE l.delivered_quantity>0 AND l.delivered_at<=cfg.as_of AND l.delivered_at<cfg.hi
+           AND l.id NOT IN (SELECT d.line_id FROM dated_deliveries d)
       ), sequenced AS (
-        SELECT deliveries.*,SUM(qty) OVER (PARTITION BY line_id ORDER BY event_at,event_id ROWS UNBOUNDED PRECEDING)-qty prior_qty FROM deliveries
+        SELECT deliveries.*,SUM(qty) OVER (PARTITION BY line_id ORDER BY event_at NULLS LAST,event_id ROWS UNBOUNDED PRECEDING)-qty prior_qty FROM deliveries
+      ), cohort AS MATERIALIZED (
+        SELECT d.* FROM sequenced d CROSS JOIN cfg WHERE d.event_at>=cfg.lo AND d.event_at<cfg.hi
+      ), cohort_lines AS MATERIALIZED (
+        SELECT DISTINCT line_id FROM cohort
+      ), dated_returns AS MATERIALIZED (
+        SELECT rl.order_line_id line_id,rl.accepted_quantity qty,r.inspected_at event_at
+          FROM commerce_returnline rl JOIN commerce_returnrequest r ON r.id=rl.return_request_id
+          JOIN commerce_order o ON o.id=r.order_id AND o.is_current JOIN cohort_lines c ON c.line_id=rl.order_line_id
+         WHERE r.status='inspected' AND rl.accepted_quantity>0 AND r.inspected_at IS NOT NULL
+      ), returned AS (
+        SELECT r.line_id,SUM(r.qty) qty FROM dated_returns r CROSS JOIN cfg WHERE r.event_at<=cfg.as_of GROUP BY r.line_id
+        UNION ALL
+        SELECT l.id,l.returned_quantity FROM selected_lines l JOIN cohort_lines c ON c.line_id=l.id CROSS JOIN cfg
+         WHERE l.returned_quantity>0 AND l.returned_at<=cfg.as_of
+           AND l.id NOT IN (SELECT r.line_id FROM dated_returns r)
       )
       SELECT COALESCE(SUM(d.qty),0) delivered_units,
              COALESCE(SUM(LEAST(d.qty,GREATEST(0,COALESCE(r.qty,0)-d.prior_qty))),0) returned_units,
              COALESCE(SUM(d.qty) FILTER (WHERE d.event_at>=cfg.maturity),0) open_window_units,
              (SELECT COUNT(DISTINCT rr.id)
-                FROM commerce_returnrequest rr JOIN commerce_returnline rl ON rl.return_request_id=rr.id
+                FROM commerce_returnrequest rr JOIN commerce_returnline rl ON rl.return_request_id=rr.id JOIN cohort_lines c ON c.line_id=rl.order_line_id
                 JOIN commerce_order pending_order ON pending_order.id=rr.order_id AND pending_order.is_current CROSS JOIN cfg pending_cfg
                WHERE rr.status IN ('requested','approved','received') AND rr.created_at<=pending_cfg.as_of
-                 AND rl.order_line_id IN (SELECT c.line_id FROM sequenced c CROSS JOIN cfg cohort_cfg WHERE c.event_at>=cohort_cfg.lo AND c.event_at<cohort_cfg.hi)) unresolved_cases
-        FROM sequenced d LEFT JOIN returned r ON r.line_id=d.line_id CROSS JOIN cfg
-       WHERE d.event_at>=cfg.lo AND d.event_at<cfg.hi
+             ) unresolved_cases
+        FROM cohort d LEFT JOIN returned r ON r.line_id=d.line_id CROSS JOIN cfg
     """
     row = _sql_dicts(sql, [lo, hi, now, maturity, filters["product_ids"]])[0]
     result = {key: int(value) for key, value in row.items()}
@@ -381,17 +426,16 @@ def variant_analytics(product_id, filters):
         target = results.get(row["sku_id"])
         if target is None:
             continue
-        unit = _unit_value(row)
         if _in_period(row["order__created_at"], lo, hi):
             target["ordered_units"] += row["quantity"]
-        for _, timestamp, quantity in row["_deliveries"]:
+        for event_id, timestamp, quantity in row["_deliveries"]:
             if _in_period(timestamp, lo, hi):
                 target["delivered_units"] += quantity
-                target["delivered_value"] += unit * quantity
-        for _, timestamp, quantity in row["_returns"]:
+                target["delivered_value"] += row["_delivery_values"][event_id]
+        for event_id, timestamp, quantity in row["_returns"]:
             if _in_period(timestamp, lo, hi):
                 target["returned_units"] += quantity
-                target["returned_value"] += unit * quantity
+                target["returned_value"] += row["_return_values"][event_id]
     for row in _cancellation_rows(filters):
         target = results.get(row["sku_id"])
         if target is not None:
@@ -427,12 +471,24 @@ def drilldown(filters, metric):
         Line = apps.get_model("commerce", "OrderLine")
         lines = {(str(line["order_id"]), line["sku_id"]): line for line in Line.objects.filter(order_id__in=references, order__is_current=True).values(
             "order_id", "sku_id", "sku_code", "product_name", "unit_price", "quantity", "discount_total")}
+        Movement = apps.get_model("commerce", "StockMovement")
+        all_releases = Movement.objects.filter(reference__in=[str(value) for value in references], kind__in=["cancel", "reservation_expired"], reserved_delta__lt=0).values(
+            "id", "reference", "sku_id", "reserved_delta", "created_at")
+        release_groups = defaultdict(list)
+        for release in all_releases:
+            release_groups[(release["reference"], release["sku_id"])].append((str(release["id"]), release["created_at"], -release["reserved_delta"]))
+        release_values = {}
+        for identity, release_events in release_groups.items():
+            line = lines.get(identity)
+            if line:
+                total = line["unit_price"] * line["quantity"] - line["discount_total"]
+                release_values.update(allocate_events(total, line["quantity"], 0, release_events))
         for row in events:
             order = orders.get(row["reference"], {})
             line = lines.get((row["reference"], row["sku_id"]))
             rows.append({"id": str(row["id"]), "order_number": order.get("number", row["reference"]),
                          "product_id": str(row["sku__product_id"]), "product_name": line["product_name"] if line else row["sku__product__name"], "sku": line["sku_code"] if line else row["sku__code"],
-                         "quantity": -row["reserved_delta"], "value": money(_unit_value(line) * -row["reserved_delta"]) if line else None, "event_at": row["created_at"].isoformat(),
+                         "quantity": -row["reserved_delta"], "value": money(release_values[str(row["id"])]) if str(row["id"]) in release_values else None, "event_at": row["created_at"].isoformat(),
                          "status": order.get("status", "cancelled"), "source": order.get("source", "live")})
     elif metric == "refunds":
         for row in _refund_rows(filters):
@@ -450,7 +506,7 @@ def drilldown(filters, metric):
                 rows.append({"id": event_id, "order_number": row["order__number"],
                              "product_id": str(row["sku__product_id"]) if row["sku__product_id"] else None,
                              "product_name": row["product_name"], "sku": row["sku_code"], "quantity": quantity,
-                             "value": money(_unit_value(row) * quantity), "event_at": timestamp.isoformat(),
+                             "value": money(row["_delivery_values"][event_id] if metric == "delivered_units" else row["_return_values"][event_id] if metric == "returned_units" else row["unit_price"]*row["quantity"]-row["discount_total"]), "event_at": timestamp.isoformat(),
                              "status": row["order__status"], "source": row["order__source"]})
     return sorted(rows, key=lambda row: (row["event_at"], row["id"]), reverse=True)
 
@@ -462,11 +518,13 @@ def cash_activity(filters):
     lo, hi = bounds(filters["start"], filters["end"])
     collected = Payment.objects.filter(order__is_current=True, status__in=["successful", "exception"], collected_at__gte=lo, collected_at__lt=hi)
     settled = PaymentSettlement.objects.filter(payment__order__is_current=True, settled_at__gte=lo, settled_at__lt=hi)
-    total = collected.aggregate(value=Sum("amount"))["value"] or ZERO
-    cod = collected.filter(method="cod").aggregate(value=Sum("amount"))["value"] or ZERO
+    receipts = collected.aggregate(total=Sum("amount"), cod=Sum("amount", filter=Q(method="cod")),
+                                   exceptions=Sum("amount", filter=Q(status="exception")), sandbox=Sum("amount", filter=Q(is_sandbox=True)))
+    total = receipts["total"] or ZERO
+    cod = receipts["cod"] or ZERO
     settlement = settled.aggregate(value=Sum("amount"))["value"] or ZERO
-    exceptions = collected.filter(status="exception").aggregate(value=Sum("amount"))["value"] or ZERO
-    sandbox = collected.filter(is_sandbox=True).aggregate(value=Sum("amount"))["value"] or ZERO
+    exceptions = receipts["exceptions"] or ZERO
+    sandbox = receipts["sandbox"] or ZERO
     refunded = Refund.objects.filter(order__is_current=True, status="confirmed", confirmed_at__gte=lo, confirmed_at__lt=hi).aggregate(value=Sum("amount"))["value"] or ZERO
     return {"scope": "company", "product_filter_applied": False, "collected_amount": money(total),
             "cod_collected_amount": money(cod), "online_collected_amount": money(total - cod),
@@ -475,7 +533,7 @@ def cash_activity(filters):
 
 
 def return_reason_activity(filters):
-    """Accepted inspection activity; case counts deduplicate multi-line requests."""
+    """Publish categories only: saved free text can contain customer information."""
     ReturnLine = apps.get_model("commerce", "ReturnLine")
     Line = apps.get_model("commerce", "OrderLine")
     lo, hi = bounds(filters["start"], filters["end"])
@@ -483,8 +541,23 @@ def return_reason_activity(filters):
                                     return_request__inspected_at__gte=lo, return_request__inspected_at__lt=hi)
     if filters["product_ids"]:
         qs = qs.filter(order_line__sku__product_id__in=filters["product_ids"])
-    rows = [{"reason": row["return_request__reason"] or "Unknown reason", "units": row["units"], "count": row["count"]}
-            for row in qs.values("return_request__reason").annotate(units=Sum("accepted_quantity"), count=Count("return_request_id", distinct=True))]
+    # Exact normalized matches to the storefront's codes/labels and seed category.
+    # Never use substring matching: a reason can append a private name or phone.
+    categories = {
+        "wrong_item": "Wrong item received", "wrong item received": "Wrong item received",
+        "damaged": "Damaged item", "damaged item": "Damaged item",
+        "quality": "Quality concern", "quality concern": "Quality concern",
+        "changed_mind": "Changed my mind", "changed my mind": "Changed my mind",
+        "size or preference": "Size or preference", "synthetic: size or preference": "Size or preference",
+    }
+    grouped = {}
+    for row in qs.values("return_request__reason").annotate(units=Sum("accepted_quantity"), count=Count("return_request_id", distinct=True)):
+        reason = categories.get((row["return_request__reason"] or "").strip().casefold(), "Other/unspecified")
+        target = grouped.setdefault(reason, {"reason": reason, "units": 0, "count": 0})
+        target["units"] += row["units"]
+        # Each case has one saved reason, so disjoint source groups can be added.
+        target["count"] += row["count"]
+    rows = list(grouped.values())
     observed = ReturnLine.objects.filter(order_line_id=OuterRef("pk"), return_request__status="inspected", accepted_quantity__gt=0, return_request__inspected_at__isnull=False)
     legacy = Line.objects.filter(order__is_current=True, returned_quantity__gt=0, returned_at__gte=lo, returned_at__lt=hi).annotate(observed=Exists(observed)).filter(observed=False)
     if filters["product_ids"]:
@@ -498,34 +571,32 @@ def return_reason_activity(filters):
 def reporting_coverage(filters):
     """Undated facts cannot be assigned to a date filter; disclose all-current scope."""
     sql = """
-      WITH cfg AS (SELECT %s::uuid[] products), selected AS (
-        SELECT l.id,l.delivered_quantity,l.delivered_at,l.returned_quantity,l.returned_at,
-               l.cancelled_quantity,l.quantity,o.created_at
-          FROM commerce_orderline l JOIN commerce_order o ON o.id=l.order_id AND o.is_current
-          LEFT JOIN commerce_sku s ON s.id=l.sku_id CROSS JOIN cfg
-         WHERE cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products)
-      ), dated_deliveries AS (
+      WITH cfg AS NOT MATERIALIZED (SELECT %s::uuid[] products), dated_deliveries AS (
         SELECT sl.order_line_id,SUM(sl.quantity) qty FROM commerce_shipmentline sl
-          JOIN commerce_shipment sh ON sh.id=sl.shipment_id JOIN selected l ON l.id=sl.order_line_id
+          JOIN commerce_shipment sh ON sh.id=sl.shipment_id
          WHERE sh.state='delivered' AND COALESCE(sh.delivered_at,sh.completed_at) IS NOT NULL GROUP BY sl.order_line_id
       ), dated_returns AS (
         SELECT rl.order_line_id,SUM(rl.accepted_quantity) qty FROM commerce_returnline rl
-          JOIN commerce_returnrequest r ON r.id=rl.return_request_id JOIN selected l ON l.id=rl.order_line_id
+          JOIN commerce_returnrequest r ON r.id=rl.return_request_id
          WHERE r.status='inspected' AND rl.accepted_quantity>0 AND r.inspected_at IS NOT NULL GROUP BY rl.order_line_id
       )
-      SELECT COALESCE(SUM(l.quantity) FILTER (WHERE l.created_at IS NULL),0) missing_order_date_units,
+      SELECT COALESCE(SUM(l.quantity) FILTER (WHERE o.created_at IS NULL),0) missing_order_date_units,
              COALESCE(SUM(GREATEST(0,l.delivered_quantity-CASE WHEN COALESCE(d.qty,0)>0 THEN d.qty
                         WHEN l.delivered_at IS NOT NULL THEN l.delivered_quantity ELSE 0 END)),0) missing_delivery_date_units,
              COALESCE(SUM(GREATEST(0,l.returned_quantity-CASE WHEN COALESCE(r.qty,0)>0 THEN r.qty
                         WHEN l.returned_at IS NOT NULL THEN l.returned_quantity ELSE 0 END)),0) missing_return_date_units,
              COALESCE(SUM(l.cancelled_quantity),0) cancelled_snapshot_units
-        FROM selected l LEFT JOIN dated_deliveries d ON d.order_line_id=l.id LEFT JOIN dated_returns r ON r.order_line_id=l.id
+        FROM commerce_orderline l JOIN commerce_order o ON o.id=l.order_id AND o.is_current
+        LEFT JOIN commerce_sku s ON s.id=l.sku_id
+        LEFT JOIN dated_deliveries d ON d.order_line_id=l.id LEFT JOIN dated_returns r ON r.order_line_id=l.id CROSS JOIN cfg
+       WHERE cardinality(cfg.products)=0 OR s.product_id=ANY(cfg.products)
     """
     row = _sql_dicts(sql, [filters["product_ids"]])[0]
     Movement = apps.get_model("commerce", "StockMovement")
     Order = apps.get_model("commerce", "Order")
     Payment = apps.get_model("commerce", "Payment")
     PaymentSettlement = apps.get_model("commerce", "PaymentSettlement")
+    Refund = apps.get_model("commerce", "Refund")
     refs = Order.objects.filter(is_current=True).annotate(reference_text=Cast("id", CharField())).values("reference_text")
     releases = Movement.objects.filter(kind__in=["cancel", "reservation_expired"], reserved_delta__lt=0, reference__in=refs)
     if filters["product_ids"]:
@@ -533,11 +604,13 @@ def reporting_coverage(filters):
     observed_cancelled = -(releases.aggregate(value=Sum("reserved_delta"))["value"] or 0)
     undated_collections = Payment.objects.filter(order__is_current=True, status__in=["successful", "exception"], collected_at__isnull=True).aggregate(value=Sum("amount"))["value"] or ZERO
     undated_settlements = PaymentSettlement.objects.filter(payment__order__is_current=True, settled_at__isnull=True).aggregate(value=Sum("amount"))["value"] or ZERO
+    undated_refunds = Refund.objects.filter(order__is_current=True, status="confirmed", confirmed_at__isnull=True).aggregate(value=Sum("amount"))["value"] or ZERO
     return {"missing_order_date_units": int(row["missing_order_date_units"]),
             "missing_delivery_date_units": int(row["missing_delivery_date_units"]),
             "missing_return_date_units": int(row["missing_return_date_units"]),
             "cancelled_units_without_dated_event": max(0, int(row["cancelled_snapshot_units"]) - observed_cancelled),
             "undated_collection_amount": money(undated_collections), "undated_settlement_amount": money(undated_settlements),
+            "undated_refund_amount": money(undated_refunds),
             "basis": "All matching current history, not the selected interval; unknown dates are excluded from dated metrics. Unit counts follow product filters; monetary coverage is company-wide."}
 
 

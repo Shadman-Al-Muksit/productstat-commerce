@@ -17,6 +17,7 @@ CHECKS = {
     'payments': 'SELECT COUNT(*),COALESCE(SUM(amount),0),COALESCE(SUM(settled_amount),0) FROM commerce_payment',
     'refunds': 'SELECT COUNT(*),COALESCE(SUM(amount),0) FROM commerce_refund',
     'settlements': 'SELECT COUNT(*),COALESCE(SUM(amount),0) FROM commerce_paymentsettlement',
+    'order_revisions': 'SELECT COUNT(*) FILTER (WHERE is_current),COUNT(*) FILTER (WHERE NOT is_current),COUNT(supersedes_id) FROM commerce_order',
 }
 
 def digest(path):
