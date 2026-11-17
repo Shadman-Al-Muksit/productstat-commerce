@@ -2,7 +2,8 @@
 import argparse
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -10,6 +11,28 @@ import time
 import uuid
 import psycopg
 from backup import ROOT, digest, snapshot
+
+def extract_backup(archive, destination):
+    """Portable safe extraction, including Python3.11 in the recovery image."""
+    destination = Path(destination).resolve()
+    destination.mkdir(parents=True, exist_ok=True)
+    for member in archive:
+        name = PurePosixPath(member.name)
+        if name.is_absolute() or '..' in name.parts or '\\' in member.name:
+            raise ValueError('Unsafe backup member path.')
+        if not name.parts or (str(name) not in {'database.dump', 'manifest.json', 'private_media'} and name.parts[0] != 'private_media'):
+            raise ValueError('Unexpected backup member.')
+        target = destination.joinpath(*name.parts).resolve()
+        if not target.is_relative_to(destination):
+            raise ValueError('Backup member escaped the restore directory.')
+        if member.isdir():
+            target.mkdir(parents=True, exist_ok=True)
+        elif member.isfile():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.extractfile(member) as source, target.open('xb') as output:
+                shutil.copyfileobj(source, output)
+        else:
+            raise ValueError('Backup links and special files are not permitted.')
 
 def verify(backup, keep=False):
     target = 'productstat_restore_' + uuid.uuid4().hex[:12]
@@ -25,7 +48,7 @@ def verify(backup, keep=False):
         subprocess.run(['gpg', '--batch', '--yes', '--pinentry-mode', 'loopback', '--passphrase-file', os.environ['BACKUP_KEY_FILE'],
                         '--decrypt', '--output', str(archive), str(backup.resolve())], check=True)
         with tarfile.open(archive) as tar:
-            tar.extractall(work / 'data', filter='data')
+            extract_backup(tar, work / 'data')
         data = work / 'data'
         dump = data / 'database.dump'
         manifest = json.loads((data / 'manifest.json').read_text())
@@ -40,7 +63,7 @@ def verify(backup, keep=False):
             created = True
             subprocess.run(['pg_restore', '--exit-on-error', '--no-owner', '--no-acl', '--dbname', target, str(dump)], check=True)
             with psycopg.connect(dbname=target) as connection:
-                actual = snapshot(connection)
+                actual = snapshot(connection, manifest['database_checks'].keys())
             passed = actual == manifest['database_checks']
             result = {'source': source, 'matches': passed, 'private_files_verified': len(actual_files),
                       'elapsed_seconds': round(time.monotonic() - started, 2),

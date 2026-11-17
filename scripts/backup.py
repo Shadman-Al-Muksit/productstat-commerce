@@ -16,6 +16,7 @@ CHECKS = {
     'inventory': 'SELECT COUNT(*),COALESCE(SUM(on_hand),0),COALESCE(SUM(reserved),0) FROM commerce_sku',
     'payments': 'SELECT COUNT(*),COALESCE(SUM(amount),0),COALESCE(SUM(settled_amount),0) FROM commerce_payment',
     'refunds': 'SELECT COUNT(*),COALESCE(SUM(amount),0) FROM commerce_refund',
+    'settlements': 'SELECT COUNT(*),COALESCE(SUM(amount),0) FROM commerce_paymentsettlement',
 }
 
 def digest(path):
@@ -25,8 +26,9 @@ def digest(path):
             result.update(block)
     return result.hexdigest()
 
-def snapshot(connection):
-    return {name: [str(value) for value in connection.execute(sql).fetchone()] for name, sql in CHECKS.items()}
+def snapshot(connection, keys=None):
+    selected = CHECKS if keys is None else {name: CHECKS[name] for name in keys}
+    return {name: [str(value) for value in connection.execute(sql).fetchone()] for name, sql in selected.items()}
 
 def create_backup():
     key = Path(os.environ['BACKUP_KEY_FILE']).resolve(strict=True)
