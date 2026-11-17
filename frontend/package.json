@@ -1,0 +1,33 @@
+{
+  "name": "productstat-commerce",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack --hostname 127.0.0.1 --port 3000",
+    "build": "next build --webpack",
+    "start": "next start --hostname 0.0.0.0 --port 3000",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "generate:api": "openapi-typescript ../docs/openapi.yaml -o src/lib/schema.d.ts",
+    "format:check": "prettier --check src/app src/components src/lib/api.ts next.config.ts postcss.config.mjs package.json tsconfig.json"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "@tanstack/react-table": "^8.21.3",
+    "lucide-react": "^0.468.0",
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.2.0",
+    "tailwindcss": "^4.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.10.1",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,3073 @@
+openapi: 3.0.3
+info:
+  title: ProductStat Commerce API
+  version: 1.0.0
+  description: Single-company commerce operations and trustworthy product analytics.
+paths:
+  /api/v1/analytics/:
+    get:
+      operationId: analytics_overview
+      parameters:
+      - in: query
+        name: end
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: product_ids
+        schema:
+          type: string
+        description: Comma-separated UUIDs; at most 20.
+      - in: query
+        name: start
+        schema:
+          type: string
+          format: date
+      tags:
+      - Analytics
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsResponse'
+          description: ''
+  /api/v1/analytics/drilldown/:
+    get:
+      operationId: analytics_drilldown
+      parameters:
+      - in: query
+        name: end
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: metric
+        schema:
+          type: string
+          enum:
+          - delivered_units
+          - ordered_units
+          - orders
+          - refunds
+          - returned_units
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: product_ids
+        schema:
+          type: string
+        description: Comma-separated UUIDs; at most 20.
+      - in: query
+        name: start
+        schema:
+          type: string
+          format: date
+      tags:
+      - Analytics
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrilldownResponse'
+          description: ''
+  /api/v1/analytics/export/:
+    get:
+      operationId: analytics_export
+      parameters:
+      - in: query
+        name: end
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: metric
+        schema:
+          type: string
+          enum:
+          - delivered_units
+          - ordered_units
+          - orders
+          - refunds
+          - returned_units
+      - in: query
+        name: product_ids
+        schema:
+          type: string
+        description: Comma-separated UUIDs; at most 20.
+      - in: query
+        name: start
+        schema:
+          type: string
+          format: date
+      tags:
+      - Analytics
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            text/csv:
+              schema:
+                type: string
+          description: Redacted rows using the same filter as drill-down.
+  /api/v1/auth/login/:
+    post:
+      operationId: login_view_post
+      tags:
+      - Commerce
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+          description: ''
+  /api/v1/auth/logout/:
+    post:
+      operationId: logout_view_post
+      tags:
+      - Commerce
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+          description: ''
+  /api/v1/auth/register/:
+    post:
+      operationId: register_post
+      tags:
+      - Commerce
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+          description: ''
+  /api/v1/bootstrap/:
+    get:
+      operationId: bootstrap_get
+      tags:
+      - Commerce
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bootstrap'
+          description: ''
+  /api/v1/cart/:
+    get:
+      operationId: cart_get
+      tags:
+      - Commerce
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResult'
+          description: ''
+    post:
+      operationId: cart_post
+      tags:
+      - Commerce
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CartInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CartInput'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResult'
+          description: ''
+    delete:
+      operationId: cart_delete
+      tags:
+      - Commerce
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResult'
+          description: ''
+  /api/v1/catalog/products/:
+    get:
+      operationId: catalog_get
+      parameters:
+      - in: query
+        name: category
+        schema:
+          type: string
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number, starting at one.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows per page; maximum 100 for operational lists.
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: sort
+        schema:
+          type: string
+          enum:
+          - name
+          - newest
+          - price_asc
+          - price_desc
+      tags:
+      - Commerce
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPage'
+          description: ''
+  /api/v1/catalog/products/{slug}/:
+    get:
+      operationId: catalog_detail_get
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - Commerce
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /api/v1/checkout/:
+    post:
+      operationId: checkout_post
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        required: true
+      tags:
+      - Commerce
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Checkout'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Checkout'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Checkout'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResult'
+          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResult'
+          description: ''
+  /api/v1/health/:
+    get:
+      operationId: health_get
+      tags:
+      - Commerce
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+          description: ''
+  /api/v1/imports/:
+    get:
+      operationId: imports_list
+      tags:
+      - Imports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchList'
+          description: ''
+    post:
+      operationId: imports_upload
+      tags:
+      - Imports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Upload'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+          description: ''
+  /api/v1/imports/{batch_id}/:
+    get:
+      operationId: imports_detail
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Imports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+          description: ''
+  /api/v1/imports/{batch_id}/commit/:
+    post:
+      operationId: imports_commit
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Imports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+          description: ''
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+          description: ''
+  /api/v1/imports/templates/:
+    get:
+      operationId: imports_template
+      parameters:
+      - in: query
+        name: kind
+        schema:
+          type: string
+          enum:
+          - adjustments
+          - catalog
+          - history
+          - lines
+          - opening_stock
+          - orders
+          - payments
+          - refunds
+          - returns
+          - shipments
+      tags:
+      - Imports
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            text/csv:
+              schema:
+                type: string
+          description: CSV header template.
+  /api/v1/orders/:
+    get:
+      operationId: orders_get
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number, starting at one.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows per page; maximum 100 for operational lists.
+      tags:
+      - Commerce
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPage'
+          description: ''
+  /api/v1/orders/{id}/:
+    get:
+      operationId: order_detail_get
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: token
+        schema:
+          type: string
+        description: Guest order access token; prefer X-Order-Token header when available.
+      tags:
+      - Commerce
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api/v1/orders/{id}/cancel/:
+    post:
+      operationId: cancel_order_post
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: token
+        schema:
+          type: string
+        description: Guest order access token; prefer X-Order-Token header when available.
+      tags:
+      - Commerce
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelInput'
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api/v1/orders/{id}/returns/:
+    post:
+      operationId: request_return_post
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: token
+        schema:
+          type: string
+        description: Guest order access token; prefer X-Order-Token header when available.
+      tags:
+      - Commerce
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReturnInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReturnInput'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+          description: ''
+  /api/v1/payments/sslcommerz/ipn/:
+    post:
+      operationId: payment_ipn_post
+      tags:
+      - Payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallbackInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CallbackInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CallbackInput'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallbackResult'
+          description: ''
+  /api/v1/payments/sslcommerz/return/:
+    get:
+      operationId: payment_return_get
+      tags:
+      - Payments
+      security:
+      - {}
+      responses:
+        '302':
+          description: Redirect to the storefront order page after independently verified
+            provider validation.
+    post:
+      operationId: payment_return_post
+      tags:
+      - Payments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallbackInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CallbackInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CallbackInput'
+        required: true
+      security:
+      - {}
+      responses:
+        '302':
+          description: Redirect to the storefront order page after independently verified
+            provider validation.
+  /api/v1/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - ug
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/staff/audit/:
+    get:
+      operationId: audit_events_get
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditList'
+          description: ''
+  /api/v1/staff/inventory/:
+    get:
+      operationId: staff_inventory_get
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number, starting at one.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows per page; maximum 100 for operational lists.
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryResult'
+          description: ''
+    post:
+      operationId: staff_inventory_post
+      tags:
+      - Staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InventoryInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InventoryInput'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryResult'
+          description: ''
+  /api/v1/staff/orders/:
+    get:
+      operationId: staff_orders_get
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number, starting at one.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows per page; maximum 100 for operational lists.
+      - in: query
+        name: q
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPage'
+          description: ''
+  /api/v1/staff/orders/{id}/:
+    get:
+      operationId: staff_order_detail_get
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api/v1/staff/orders/{id}/action/:
+    post:
+      operationId: staff_order_action_post
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderAction'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderAction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderAction'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api/v1/staff/products/:
+    get:
+      operationId: staff_products_get
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number, starting at one.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows per page; maximum 100 for operational lists.
+      - in: query
+        name: q
+        schema:
+          type: string
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductList'
+          description: ''
+    post:
+      operationId: staff_products_post
+      tags:
+      - Staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductWrite'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /api/v1/staff/products/{id}/:
+    get:
+      operationId: staff_product_detail_get
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    patch:
+      operationId: staff_product_detail_patch
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductWrite'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /api/v1/staff/refunds/:
+    get:
+      operationId: staff_refunds_get
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number, starting at one.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows per page; maximum 100 for operational lists.
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundPage'
+          description: ''
+  /api/v1/staff/refunds/{id}/confirm/:
+    post:
+      operationId: confirm_refund_post
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RefundInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RefundInput'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+          description: ''
+  /api/v1/staff/returns/:
+    get:
+      operationId: staff_returns_get
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: Page number, starting at one.
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: Rows per page; maximum 100 for operational lists.
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnPage'
+          description: ''
+  /api/v1/staff/returns/{id}/action/:
+    post:
+      operationId: staff_return_action_post
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnAction'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReturnAction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReturnAction'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+          description: ''
+  /api/v1/staff/settings/:
+    get:
+      operationId: staff_settings_get
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+          description: ''
+    patch:
+      operationId: staff_settings_patch
+      tags:
+      - Staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCompany'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCompany'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCompany'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+          description: ''
+  /api/v1/staff/users/:
+    get:
+      operationId: staff_users_get
+      tags:
+      - Staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserList'
+          description: ''
+    post:
+      operationId: staff_users_post
+      tags:
+      - Staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/staff/users/{id}/:
+    patch:
+      operationId: staff_user_detail_patch
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserInput'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserInput'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserInput'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+components:
+  schemas:
+    Address:
+      type: object
+      properties:
+        line1:
+          type: string
+        city:
+          type: string
+        area:
+          type: string
+        postal_code:
+          type: string
+      required:
+      - city
+      - line1
+    AnalyticsResponse:
+      type: object
+      properties:
+        filters:
+          $ref: '#/components/schemas/ReportingFilters'
+        summary:
+          $ref: '#/components/schemas/ReportingSummary'
+        cohort:
+          $ref: '#/components/schemas/ReportingCohort'
+        cash:
+          $ref: '#/components/schemas/ReportingCash'
+        delivery:
+          $ref: '#/components/schemas/ReportingDelivery'
+        comparison:
+          $ref: '#/components/schemas/ReportingComparison'
+        trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportingTrend'
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportingProduct'
+        meta:
+          $ref: '#/components/schemas/ReportingMeta'
+      required:
+      - cash
+      - cohort
+      - comparison
+      - delivery
+      - filters
+      - meta
+      - products
+      - summary
+      - trend
+    Audit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        event:
+          type: string
+        entity:
+          type: string
+        reference:
+          type: string
+        details:
+          type: object
+          additionalProperties: {}
+        actor:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - actor
+      - created_at
+      - details
+      - entity
+      - event
+      - id
+      - reference
+    AuditList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Audit'
+      required:
+      - results
+    AuthResult:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          nullable: true
+        csrfToken:
+          type: string
+      required:
+      - csrfToken
+      - user
+    Batch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          type: string
+          maxLength: 30
+        status:
+          type: string
+          maxLength: 30
+        filename:
+          type: string
+          maxLength: 250
+        source_name:
+          type: string
+          maxLength: 100
+        progress:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        total_rows:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        valid_rows:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        error_rows:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        errors: {}
+        preview: {}
+        result: {}
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        committed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - created_at
+      - filename
+      - id
+      - kind
+      - source_name
+    BatchList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Batch'
+      required:
+      - results
+    Bootstrap:
+      type: object
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          nullable: true
+        company:
+          $ref: '#/components/schemas/Company'
+        csrfToken:
+          type: string
+        delivery_zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/Zone'
+        payment:
+          $ref: '#/components/schemas/PaymentConfiguration'
+        demo:
+          type: boolean
+      required:
+      - company
+      - csrfToken
+      - delivery_zones
+      - demo
+      - payment
+      - user
+    CallbackInput:
+      type: object
+      properties:
+        tran_id:
+          type: string
+        val_id:
+          type: string
+        status:
+          type: string
+      required:
+      - tran_id
+      - val_id
+    CallbackResult:
+      type: object
+      properties:
+        status:
+          type: string
+        order_id:
+          type: string
+          format: uuid
+      required:
+      - order_id
+      - status
+    CancelInput:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuantityInput'
+    CartInput:
+      type: object
+      properties:
+        sku_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          maximum: 100
+          minimum: 0
+      required:
+      - quantity
+      - sku_id
+    CartLine:
+      type: object
+      properties:
+        sku_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+        sku:
+          $ref: '#/components/schemas/CartSKU'
+        product:
+          $ref: '#/components/schemas/CartProduct'
+        line_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - line_total
+      - product
+      - quantity
+      - sku
+      - sku_id
+    CartProduct:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        image_url:
+          type: string
+      required:
+      - image_url
+      - name
+      - slug
+    CartResult:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartLine'
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - items
+      - subtotal
+    CartSKU:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        label:
+          type: string
+        attributes:
+          type: object
+          additionalProperties: {}
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        available:
+          type: integer
+        is_active:
+          type: boolean
+      required:
+      - attributes
+      - available
+      - code
+      - id
+      - is_active
+      - label
+      - price
+    Checkout:
+      type: object
+      properties:
+        customer_name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          default: ''
+        phone:
+          type: string
+          maxLength: 25
+          pattern: ^\+?8801[3-9]\d{8}$|^01[3-9]\d{8}$
+        address:
+          type: object
+          additionalProperties: {}
+        delivery_zone_id:
+          type: integer
+          minimum: 1
+        payment_method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+      required:
+      - address
+      - customer_name
+      - delivery_zone_id
+      - payment_method
+      - phone
+    CheckoutResult:
+      type: object
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        access_token:
+          type: string
+        payment_url:
+          type: string
+          format: uri
+          nullable: true
+      required:
+      - access_token
+      - order
+      - payment_url
+    Company:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 150
+        support_email:
+          type: string
+          format: email
+          maxLength: 254
+        currency:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+        return_window_days:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        cod_enabled:
+          type: boolean
+        logo_url:
+          type: string
+          format: uri
+          maxLength: 200
+        tax_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        delivery_zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/Zone'
+      required:
+      - currency
+      - timezone
+    DispositionEnum:
+      enum:
+      - restock
+      - quarantine
+      - dispose
+      type: string
+      description: |-
+        * `restock` - restock
+        * `quarantine` - quarantine
+        * `dispose` - dispose
+    DrilldownResponse:
+      type: object
+      properties:
+        metric:
+          type: string
+        count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DrilldownRow'
+      required:
+      - count
+      - metric
+      - page
+      - page_size
+      - results
+    DrilldownRow:
+      type: object
+      properties:
+        id:
+          type: string
+        order_number:
+          type: string
+        product_id:
+          type: string
+          format: uuid
+          nullable: true
+        product_name:
+          type: string
+        sku:
+          type: string
+        quantity:
+          type: integer
+          nullable: true
+        value:
+          type: string
+        event_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+        source:
+          type: string
+      required:
+      - event_at
+      - id
+      - order_number
+      - product_id
+      - product_name
+      - quantity
+      - sku
+      - source
+      - status
+      - value
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+      required:
+      - service
+      - status
+    InspectionLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        accepted_quantity:
+          type: integer
+          minimum: 0
+        restock_quantity:
+          type: integer
+          minimum: 0
+        disposition:
+          $ref: '#/components/schemas/DispositionEnum'
+      required:
+      - accepted_quantity
+      - disposition
+      - id
+      - restock_quantity
+    InventoryInput:
+      type: object
+      properties:
+        sku_id:
+          type: string
+          format: uuid
+        delta:
+          type: integer
+          maximum: 1000000
+          minimum: -1000000
+        reason:
+          type: string
+          maxLength: 200
+      required:
+      - delta
+      - reason
+      - sku_id
+    InventoryResult:
+      type: object
+      properties:
+        count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventorySKU'
+      required:
+      - count
+      - page
+      - page_size
+      - results
+    InventorySKU:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        label:
+          type: string
+        product_name:
+          type: string
+        on_hand:
+          type: integer
+        reserved:
+          type: integer
+        available:
+          type: integer
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - available
+      - code
+      - id
+      - label
+      - on_hand
+      - price
+      - product_name
+      - reserved
+    KindEnum:
+      enum:
+      - catalog
+      - opening_stock
+      - adjustments
+      - history
+      type: string
+      description: |-
+        * `catalog` - catalog
+        * `opening_stock` - opening_stock
+        * `adjustments` - adjustments
+        * `history` - history
+    LoginInput:
+      type: object
+      properties:
+        username:
+          type: string
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+          maxLength: 128
+      required:
+      - password
+      - username
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        status:
+          type: string
+        payment_method:
+          type: string
+        customer_name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        discount_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        shipping_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        tax_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        grand_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        collected_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        refunded_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        created_at:
+          type: string
+          format: date-time
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        dispatched_at:
+          type: string
+          format: date-time
+          nullable: true
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        reservation_expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_historical:
+          type: boolean
+        source:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderLine'
+        shipments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Shipment'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+        returns:
+          type: array
+          items:
+            $ref: '#/components/schemas/Return'
+        refunds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Refund'
+        prepared_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - address
+      - collected_total
+      - confirmed_at
+      - created_at
+      - customer_name
+      - delivered_at
+      - discount_total
+      - dispatched_at
+      - email
+      - grand_total
+      - id
+      - is_historical
+      - lines
+      - number
+      - payment_method
+      - payments
+      - phone
+      - prepared_at
+      - refunded_total
+      - refunds
+      - reservation_expires_at
+      - returns
+      - shipments
+      - shipping_total
+      - source
+      - status
+      - subtotal
+      - tax_total
+    OrderAction:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuantityInput'
+        action:
+          $ref: '#/components/schemas/OrderActionActionEnum'
+        carrier:
+          type: string
+          maxLength: 100
+        tracking_number:
+          type: string
+          maxLength: 120
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        reference:
+          type: string
+          maxLength: 200
+      required:
+      - action
+    OrderActionActionEnum:
+      enum:
+      - prepare
+      - dispatch
+      - deliver
+      - fail
+      - return_to_origin
+      - collect_cod
+      - settle_cod
+      - cancel
+      type: string
+      description: |-
+        * `prepare` - prepare
+        * `dispatch` - dispatch
+        * `deliver` - deliver
+        * `fail` - fail
+        * `return_to_origin` - return_to_origin
+        * `collect_cod` - collect_cod
+        * `settle_cod` - settle_cod
+        * `cancel` - cancel
+    OrderLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku_id:
+          type: string
+          format: uuid
+          nullable: true
+        sku_code:
+          type: string
+        product_name:
+          type: string
+        variant_name:
+          type: string
+        quantity:
+          type: integer
+        cancelled_quantity:
+          type: integer
+        shipped_quantity:
+          type: integer
+        delivered_quantity:
+          type: integer
+        returned_quantity:
+          type: integer
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        discount_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        tax_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        line_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+      required:
+      - cancelled_quantity
+      - delivered_quantity
+      - discount_total
+      - id
+      - line_total
+      - product_name
+      - quantity
+      - returned_quantity
+      - shipped_quantity
+      - sku_code
+      - sku_id
+      - tax_total
+      - unit_price
+      - variant_name
+    OrderPage:
+      type: object
+      properties:
+        count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+      required:
+      - count
+      - page
+      - page_size
+      - results
+    PatchedCompany:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 150
+        support_email:
+          type: string
+          format: email
+          maxLength: 254
+        currency:
+          type: string
+          readOnly: true
+        timezone:
+          type: string
+          readOnly: true
+        return_window_days:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        cod_enabled:
+          type: boolean
+        logo_url:
+          type: string
+          format: uri
+          maxLength: 200
+        tax_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        delivery_zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/Zone'
+    PatchedProductWrite:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 220
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+        category:
+          type: string
+          maxLength: 100
+        image_url:
+          type: string
+          maxLength: 1000
+        is_active:
+          type: boolean
+        skus:
+          type: array
+          items:
+            $ref: '#/components/schemas/SKUWrite'
+          writeOnly: true
+    PatchedUserInput:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        password:
+          type: string
+          writeOnly: true
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        method:
+          type: string
+        status:
+          type: string
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        settled_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        is_sandbox:
+          type: boolean
+        collected_at:
+          type: string
+          format: date-time
+          nullable: true
+        settled_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - amount
+      - collected_at
+      - id
+      - is_sandbox
+      - method
+      - settled_amount
+      - settled_at
+      - status
+    PaymentConfiguration:
+      type: object
+      properties:
+        cod:
+          type: boolean
+        sslcommerz_enabled:
+          type: boolean
+        sandbox:
+          type: boolean
+      required:
+      - cod
+      - sandbox
+      - sslcommerz_enabled
+    PaymentMethodEnum:
+      enum:
+      - cod
+      - sslcommerz
+      type: string
+      description: |-
+        * `cod` - cod
+        * `sslcommerz` - sslcommerz
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 220
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+        category:
+          type: string
+          maxLength: 100
+        image_url:
+          type: string
+          maxLength: 1000
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        skus:
+          type: array
+          items:
+            $ref: '#/components/schemas/SKU'
+          readOnly: true
+        min_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+          readOnly: true
+        total_available:
+          type: integer
+          readOnly: true
+      required:
+      - category
+      - created_at
+      - id
+      - min_price
+      - name
+      - skus
+      - slug
+      - total_available
+    ProductList:
+      type: object
+      properties:
+        count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+      required:
+      - count
+      - page
+      - page_size
+      - results
+    ProductPage:
+      type: object
+      properties:
+        count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        categories:
+          type: array
+          items:
+            type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+      required:
+      - categories
+      - count
+      - page
+      - page_size
+      - results
+    ProductWrite:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 220
+          pattern: ^[-a-zA-Z0-9_]+$
+        description:
+          type: string
+        category:
+          type: string
+          maxLength: 100
+        image_url:
+          type: string
+          maxLength: 1000
+        is_active:
+          type: boolean
+        skus:
+          type: array
+          items:
+            $ref: '#/components/schemas/SKUWrite'
+          writeOnly: true
+      required:
+      - category
+      - name
+      - slug
+    QuantityInput:
+      type: object
+      properties:
+        order_line_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+      required:
+      - order_line_id
+      - quantity
+    Refund:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        order_number:
+          type: string
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        status:
+          type: string
+        reason:
+          type: string
+        reference:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - amount
+      - confirmed_at
+      - created_at
+      - id
+      - order_id
+      - order_number
+      - reason
+      - reference
+      - status
+    RefundInput:
+      type: object
+      properties:
+        reference:
+          type: string
+          maxLength: 150
+      required:
+      - reference
+    RefundPage:
+      type: object
+      properties:
+        count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Refund'
+      required:
+      - count
+      - page
+      - page_size
+      - results
+    Register:
+      type: object
+      properties:
+        username:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+          maxLength: 128
+      required:
+      - email
+      - password
+      - username
+    ReportingCash:
+      type: object
+      properties:
+        scope:
+          type: string
+        product_filter_applied:
+          type: boolean
+        collected_amount:
+          type: string
+        cod_collected_amount:
+          type: string
+        online_collected_amount:
+          type: string
+        settled_amount:
+          type: string
+        exception_collected_amount:
+          type: string
+        sandbox_collected_amount:
+          type: string
+        basis:
+          type: string
+      required:
+      - basis
+      - cod_collected_amount
+      - collected_amount
+      - exception_collected_amount
+      - online_collected_amount
+      - product_filter_applied
+      - sandbox_collected_amount
+      - scope
+      - settled_amount
+    ReportingCohort:
+      type: object
+      properties:
+        delivered_units:
+          type: integer
+        returned_units:
+          type: integer
+        return_rate:
+          type: number
+          format: double
+          nullable: true
+        open_window_units:
+          type: integer
+        preliminary:
+          type: boolean
+        as_of:
+          type: string
+          format: date-time
+        basis:
+          type: string
+      required:
+      - as_of
+      - basis
+      - delivered_units
+      - open_window_units
+      - preliminary
+      - return_rate
+      - returned_units
+    ReportingComparison:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+        summary:
+          $ref: '#/components/schemas/ReportingSummary'
+        change_percent:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+            nullable: true
+      required:
+      - change_percent
+      - end
+      - start
+      - summary
+    ReportingDelivery:
+      type: object
+      properties:
+        delivered_shipments:
+          type: integer
+        failed_shipments:
+          type: integer
+        returned_to_origin_shipments:
+          type: integer
+        terminal_shipments:
+          type: integer
+        success_rate:
+          type: number
+          format: double
+          nullable: true
+        basis:
+          type: string
+      required:
+      - basis
+      - delivered_shipments
+      - failed_shipments
+      - returned_to_origin_shipments
+      - success_rate
+      - terminal_shipments
+    ReportingFilters:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+        timezone:
+          type: string
+        currency:
+          type: string
+        product_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+      required:
+      - currency
+      - end
+      - product_ids
+      - start
+      - timezone
+    ReportingMeta:
+      type: object
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        customer_data:
+          type: string
+        basis:
+          type: string
+        money_basis:
+          type: string
+      required:
+      - basis
+      - customer_data
+      - generated_at
+      - money_basis
+    ReportingProduct:
+      type: object
+      properties:
+        orders:
+          type: integer
+        ordered_units:
+          type: integer
+        ordered_value:
+          type: string
+        delivered_units:
+          type: integer
+        delivered_value:
+          type: string
+        returned_units:
+          type: integer
+        refunded_amount:
+          type: string
+        net_delivered_value:
+          type: string
+        id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        category:
+          type: string
+        image_url:
+          type: string
+      required:
+      - category
+      - delivered_units
+      - delivered_value
+      - id
+      - image_url
+      - name
+      - net_delivered_value
+      - ordered_units
+      - ordered_value
+      - orders
+      - refunded_amount
+      - returned_units
+    ReportingSummary:
+      type: object
+      properties:
+        orders:
+          type: integer
+        ordered_units:
+          type: integer
+        ordered_value:
+          type: string
+        delivered_units:
+          type: integer
+        delivered_value:
+          type: string
+        returned_units:
+          type: integer
+        refunded_amount:
+          type: string
+        net_delivered_value:
+          type: string
+      required:
+      - delivered_units
+      - delivered_value
+      - net_delivered_value
+      - ordered_units
+      - ordered_value
+      - orders
+      - refunded_amount
+      - returned_units
+    ReportingTrend:
+      type: object
+      properties:
+        orders:
+          type: integer
+        ordered_units:
+          type: integer
+        ordered_value:
+          type: string
+        delivered_units:
+          type: integer
+        delivered_value:
+          type: string
+        returned_units:
+          type: integer
+        refunded_amount:
+          type: string
+        net_delivered_value:
+          type: string
+        date:
+          type: string
+          format: date
+      required:
+      - date
+      - delivered_units
+      - delivered_value
+      - net_delivered_value
+      - ordered_units
+      - ordered_value
+      - orders
+      - refunded_amount
+      - returned_units
+    Return:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_id:
+          type: string
+          format: uuid
+        order_number:
+          type: string
+        status:
+          type: string
+        reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        received_at:
+          type: string
+          format: date-time
+          nullable: true
+        inspected_at:
+          type: string
+          format: date-time
+          nullable: true
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnLine'
+      required:
+      - created_at
+      - id
+      - inspected_at
+      - lines
+      - order_id
+      - order_number
+      - reason
+      - received_at
+      - status
+    ReturnAction:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/ReturnActionActionEnum'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InspectionLine'
+      required:
+      - action
+    ReturnActionActionEnum:
+      enum:
+      - approve
+      - reject
+      - receive
+      - inspect
+      type: string
+      description: |-
+        * `approve` - approve
+        * `reject` - reject
+        * `receive` - receive
+        * `inspect` - inspect
+    ReturnInput:
+      type: object
+      properties:
+        reason:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuantityInput'
+      required:
+      - lines
+      - reason
+    ReturnLine:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order_line_id:
+          type: string
+          format: uuid
+        product_name:
+          type: string
+        quantity:
+          type: integer
+        accepted_quantity:
+          type: integer
+        restock_quantity:
+          type: integer
+        disposition:
+          type: string
+      required:
+      - accepted_quantity
+      - disposition
+      - id
+      - order_line_id
+      - product_name
+      - quantity
+      - restock_quantity
+    ReturnPage:
+      type: object
+      properties:
+        count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Return'
+      required:
+      - count
+      - page
+      - page_size
+      - results
+    RoleEnum:
+      enum:
+      - customer
+      - administrator
+      - operator
+      - analyst
+      type: string
+      description: |-
+        * `customer` - customer
+        * `administrator` - administrator
+        * `operator` - operator
+        * `analyst` - analyst
+    SKU:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          maxLength: 80
+        label:
+          type: string
+          maxLength: 120
+        attributes: {}
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        available:
+          type: integer
+          readOnly: true
+        is_active:
+          type: boolean
+      required:
+      - available
+      - code
+      - id
+      - price
+    SKUWrite:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          maxLength: 80
+        label:
+          type: string
+          maxLength: 120
+        attributes:
+          type: object
+          additionalProperties: {}
+        price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        is_active:
+          type: boolean
+    Shipment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        state:
+          type: string
+        carrier:
+          type: string
+        tracking_number:
+          type: string
+        dispatched_at:
+          type: string
+          format: date-time
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - carrier
+      - delivered_at
+      - dispatched_at
+      - id
+      - state
+      - tracking_number
+    Upload:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        source_name:
+          type: string
+        file:
+          type: string
+          format: uri
+        files:
+          type: array
+          items:
+            type: string
+            format: uri
+      required:
+      - kind
+      - source_name
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+      required:
+      - id
+      - username
+    UserInput:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - id
+      - username
+    UserList:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+      required:
+      - results
+    Zone:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        charge:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,2})?$
+        is_active:
+          type: boolean
+      required:
+      - charge
+      - id
+      - name
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid

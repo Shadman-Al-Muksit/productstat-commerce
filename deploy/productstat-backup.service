@@ -1,0 +1,10 @@
+[Unit]
+Description=Encrypted ProductStat off-server backup
+After=network-online.target
+[Service]
+Type=oneshot
+User=productstat
+WorkingDirectory=/srv/productstat
+EnvironmentFile=/etc/productstat-backup.env
+ExecStart=/srv/productstat/scripts/backup-compose.sh
+# BACKUP_DIR should be an encrypted remote mount. Key is stored separately.

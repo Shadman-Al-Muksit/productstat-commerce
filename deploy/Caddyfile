@@ -1,0 +1,14 @@
+{$PUBLIC_DOMAIN} {
+  encode zstd gzip
+  request_body { max_size 11MB }
+  handle /api/* {
+    reverse_proxy backend:8001
+  }
+  handle_path /static/* {
+    root * /srv/static
+    file_server
+  }
+  handle {
+    reverse_proxy frontend:3000
+  }
+}

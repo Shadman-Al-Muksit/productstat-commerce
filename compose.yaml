@@ -1,0 +1,79 @@
+name: productstat
+x-app: &app
+  build: {context: ., dockerfile: backend/Dockerfile}
+  env_file: .env.production
+  environment:
+    DJANGO_DEBUG: '0'
+    PGHOST: db
+    PGPORT: '5432'
+    REDIS_URL: redis://redis:6379/0
+    MEDIA_ROOT: /app/private_media
+  volumes: [private_media:/app/private_media, staticfiles:/app/staticfiles]
+  restart: unless-stopped
+services:
+  db:
+    image: postgres:17-bookworm
+    env_file: .env.production
+    volumes: [database:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes: [redis:/data]
+    restart: unless-stopped
+  backend:
+    <<: *app
+    command: [sh, -c, 'python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8001 --workers 3 --timeout 60 --error-logfile -']
+    depends_on: {db: {condition: service_healthy}, redis: {condition: service_started}}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/v1/health/', timeout=5)"]
+      interval: 15s
+      start_period: 60s
+      retries: 5
+  worker:
+    <<: *app
+    command: [celery, -A, config, worker, --loglevel=INFO, --concurrency=2]
+    depends_on: {backend: {condition: service_healthy}}
+  beat:
+    <<: *app
+    command: [celery, -A, config, beat, --loglevel=INFO, --schedule, /tmp/celerybeat]
+    depends_on: {backend: {condition: service_healthy}}
+  frontend:
+    build: {context: ., dockerfile: frontend/Dockerfile}
+    restart: unless-stopped
+    depends_on: {backend: {condition: service_healthy}}
+  caddy:
+    image: caddy:2-alpine
+    environment: {PUBLIC_DOMAIN: '${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN in .env.production}'}
+    ports: ['80:80', '443:443']
+    volumes: ['./deploy/Caddyfile:/etc/caddy/Caddyfile:ro', 'caddy_data:/data', 'caddy_config:/config', 'staticfiles:/srv/static:ro']
+    depends_on: [frontend, backend]
+    restart: unless-stopped
+  backup:
+    profiles: [maintenance]
+    build: {context: ., dockerfile: deploy/backup.Dockerfile}
+    env_file: .env.production
+    environment:
+      PGHOST: db
+      PGPORT: '5432'
+      MEDIA_ROOT: /private_media
+      BACKUP_KEY_FILE: /run/secrets/backup_key
+      BACKUP_DIR: /backups
+      RESTORE_EVIDENCE_FILE: /backups/restore-evidence.json
+    volumes: ['private_media:/private_media:ro', '${BACKUP_DIR:-./backups}:/backups']
+    secrets: [backup_key]
+    depends_on: {db: {condition: service_healthy}}
+secrets:
+  backup_key:
+    file: ${BACKUP_KEY_FILE:-./.runtime/backup-key}
+volumes:
+  database:
+  redis:
+  private_media:
+  staticfiles:
+  caddy_data:
+  caddy_config:
