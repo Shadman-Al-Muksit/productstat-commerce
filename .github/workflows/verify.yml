@@ -70,6 +70,7 @@ jobs:
             docs/screenshots
   containers:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - run: docker build -f backend/Dockerfile -t productstat-backend .
@@ -80,6 +81,8 @@ jobs:
       - run: docker compose --env-file .env.production up -d --build --wait --wait-timeout 120
       - run: docker compose --env-file .env.production exec -T backend python manage.py seed_demo --small
       - run: python3 scripts/container-smoke.py --base https://localhost --allow-self-signed
+      - run: |
+          docker compose --env-file .env.production exec -T backend python -c "from pathlib import Path; p=Path('/app/private_media/recovery-ci.txt'); p.write_text('Synthetic private-volume recovery fixture. No personal data.')"
       - run: docker compose --env-file .env.production --profile maintenance build backup
       - run: bash scripts/backup-compose.sh
       - run: |
@@ -92,6 +95,8 @@ jobs:
         if: always()
         with:
           name: container-verification
-          path: .runtime/container-evidence.json
+          path: |
+            .runtime/container-evidence.json
+            backups/restore-evidence.json
       - run: docker compose --env-file .env.production down
         if: always()

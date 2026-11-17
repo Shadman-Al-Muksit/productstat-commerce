@@ -2,7 +2,9 @@
 import argparse
 import datetime as dt
 import http.cookiejar
+import html
 import json
+import re
 from pathlib import Path
 import ssl
 import time
@@ -51,15 +53,26 @@ guest, staff = Client(), Client()
 for attempt in range(60):
     try:
         assert guest.call('GET', 'health/')['status'] == 'ok'
+        with urllib.request.urlopen(args.base + '/', context=context, timeout=10) as response:
+            assert response.status == 200
+            page_html = response.read().decode()
         break
     except (urllib.error.URLError, AssertionError):
         if attempt == 59:
             raise
         time.sleep(1)
+assets = re.findall(r'<script[^>]+src="([^"]+)"', page_html)
+asset = next(asset for asset in assets if asset.startswith('/_next/static/'))
+with urllib.request.urlopen(args.base + html.unescape(asset), context=context, timeout=20) as response:
+    assert response.status == 200 and len(response.read()) > 0
 bootstrap = guest.call('GET', 'bootstrap/')
 catalogue = guest.call('GET', 'catalog/products/')
 product = next(product for product in catalogue['results'] if any(sku['available'] >= 2 for sku in product['skus']))
 sku = next(sku for sku in product['skus'] if sku['available'] >= 2)
+with urllib.request.urlopen(args.base + product['image_url'], context=context, timeout=20) as response:
+    assert response.status == 200 and b'<svg' in response.read()
+with urllib.request.urlopen(args.base + '/products/' + product['slug'], context=context, timeout=20) as response:
+    assert response.status == 200 and html.escape(product['name']) in response.read().decode()
 staff.call('POST', 'auth/login/', {'username': 'administrator', 'password': values['DEMO_PASSWORD']})
 date = dt.datetime.now(dt.timezone(dt.timedelta(hours=6))).date().isoformat()
 report = f'analytics/?start={date}&end={date}&product_ids={product["id"]}'
@@ -89,6 +102,7 @@ after = staff.call('GET', report)
 assert after['summary']['delivered_units'] - before['summary']['delivered_units'] == 2
 assert after['summary']['returned_units'] - before['summary']['returned_units'] == 1
 evidence = {'status':'passed', 'transport':'Caddy HTTPS (local CI self-signed)' if args.allow_self_signed else 'Verified HTTPS',
+            'standalone_frontend':True, 'static_asset':True, 'product_image':True, 'product_metadata':True,
             'order_number':order['number'], 'workflow':'purchase/prepare/dispatch/deliver/COD collection/settlement/partial return/refund/report',
             'elapsed_seconds':round(time.monotonic()-started, 2)}
 (ROOT / '.runtime').mkdir(exist_ok=True)
