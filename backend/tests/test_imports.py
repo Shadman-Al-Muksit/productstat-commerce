@@ -11,7 +11,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from commerce.imports import SCHEMAS, commit_batch, stage_upload, validate_batch
-from commerce.models import ImportBatch, Order, OrderLine, OutboxEvent, Product, Refund, ReturnRequest, Shipment, SKU, StockMovement
+from commerce.models import ImportBatch, Order, OrderLine, OutboxEvent, PaymentSettlement, Product, Refund, ReturnRequest, Shipment, SKU, StockMovement
 from commerce.tasks import deliver_outbox
 
 
@@ -51,6 +51,9 @@ def test_history_repeat_is_idempotent_and_does_not_change_stock(import_data, set
         assert committed.result["created" if attempt == 0 else "skipped"] == 1
     assert Order.objects.filter(source="csv:legacy").count() == 1
     assert OrderLine.objects.count() == 1
+    assert PaymentSettlement.objects.count() == 1
+    assert PaymentSettlement.objects.get().amount == 200
+    assert PaymentSettlement.objects.get().source == "import"
     sku.refresh_from_db()
     assert sku.on_hand == 100
     assert sku.reserved == 0

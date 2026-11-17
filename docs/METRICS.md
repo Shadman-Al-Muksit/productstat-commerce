@@ -12,9 +12,11 @@ All reports use Asia/Dhaka calendar boundaries. `start` and `end` are inclusive 
 | Net delivered value | Delivered merchandise value minus confirmed merchandise refund allocations occurring in the interval. Refunds can concern older deliveries; a negative interval is valid. |
 | Delivery success | Delivered shipments / (delivered + failed + returned-to-origin shipments), using each shipment's terminal date. Pending shipments are excluded. A shipment containing multiple selected products is counted once. |
 | Collections | Verified successful and exception payment receipts, on collection date. COD and online collection are separate. Includes shipping/tax. Exception receipts are separately exposed as refund obligations; sandbox receipts are separately identified. |
-| Settlement | Recorded settled payment amounts, on settlement date. Collection and settlement are different events. |
+| Settlement | Sum of immutable individual `PaymentSettlement.amount` events on each event's settlement date. Collection and settlement are different events. A payment's cumulative `settled_amount` is a compatibility balance, never the period measure. |
 
 Collections and settlements are **company-wide**, even when merchandise reports filter products. An order-level cash payment includes delivery charges and cannot honestly be assigned to one SKU without a separately documented allocation. The API explicitly returns `cash.scope = company` and `product_filter_applied = false`.
+
+Partial settlement transfers retain their own dates: BDT 40 transferred on Monday and BDT 60 on Tuesday report 40 and 60 respectively, rather than moving the entire cumulative 100 to Tuesday. Live transfers append individually identified events; historical payment rows and fresh demo records create one event for each positive settlement snapshot. The migration reconstructs older live transfers only when complete audit references, amounts and dates reconcile exactly to the stored balance. Otherwise it preserves one explicitly marked `legacy_aggregate` event at the observed last-settlement date. Such a fallback cannot reconstruct missing earlier partial-transfer periods; an undated legacy aggregate remains undated and is excluded from date-filtered totals. Retain source bank/courier records for historical reconciliation.
 
 ## Return rate: delivery cohort
 

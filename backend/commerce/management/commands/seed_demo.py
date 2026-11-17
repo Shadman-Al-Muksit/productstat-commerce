@@ -12,7 +12,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from commerce.models import (AuditEvent, CompanySettings, DeliveryZone, Order, OrderLine, Payment, Product, Refund, RefundLine,
+from commerce.models import (AuditEvent, CompanySettings, DeliveryZone, Order, OrderLine, Payment, PaymentSettlement, Product, Refund, RefundLine,
                              ReturnLine, ReturnRequest, Shipment, ShipmentLine, SKU, StockMovement)
 
 NAMESPACE = uuid.UUID("32bc1aa3-83bb-4ad5-b85b-b05737dbdfbb")
@@ -104,7 +104,7 @@ class Command(BaseCommand):
         SKU.objects.bulk_create(skus, batch_size=1000)
         StockMovement.objects.bulk_create(movements, batch_size=1000)
 
-        orders, lines, shipments, shipment_lines, payments, returns, return_lines, refunds, refund_lines = ([] for _ in range(9))
+        orders, lines, shipments, shipment_lines, payments, returns, return_lines, refunds, refund_lines, settlements = ([] for _ in range(10))
         for index in range(order_count):
             ordered_at = beginning + timedelta(seconds=int(365 * 86400 * index / order_count))
             age = (end - ordered_at).days
@@ -156,11 +156,15 @@ class Command(BaseCommand):
             orders.append(order)
             if state == "delivered":
                 settled = age > 5 and index % 9 != 0
-                payments.append(Payment(order=order, method=order.payment_method, status="successful", amount=order.grand_total,
+                payment = Payment(order=order, method=order.payment_method, status="successful", amount=order.grand_total,
                                         provider_transaction_id=f"demo-payment-{index}", collected_at=delivered_at,
-                                        settled_amount=order.grand_total if settled else Decimal(0), settled_at=delivered_at + timedelta(days=2) if settled else None))
+                                        settled_amount=order.grand_total if settled else Decimal(0), settled_at=delivered_at + timedelta(days=2) if settled else None)
+                payments.append(payment)
+                if settled:
+                    settlements.append(PaymentSettlement(id=uid(f"settlement:{index}"), payment=payment, amount=payment.settled_amount,
+                                                         settled_at=payment.settled_at, reference=f"demo-settlement-{index}", source="demo"))
         for model, objects in [(Order, orders), (OrderLine, lines), (Shipment, shipments), (ShipmentLine, shipment_lines),
-                               (Payment, payments), (ReturnRequest, returns), (ReturnLine, return_lines), (Refund, refunds), (RefundLine, refund_lines)]:
+                               (Payment, payments), (PaymentSettlement, settlements), (ReturnRequest, returns), (ReturnLine, return_lines), (Refund, refunds), (RefundLine, refund_lines)]:
             model.objects.bulk_create(objects, batch_size=1000)
             self.stdout.write(f"{model.__name__}: {len(objects):,}")
         AuditEvent.objects.create(event="seed_completed", entity="demo", reference="synthetic-history",

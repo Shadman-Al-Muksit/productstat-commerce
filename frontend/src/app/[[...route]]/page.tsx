@@ -31,7 +31,10 @@ export async function generateMetadata({
     try {
       const response = await fetch(
         `${process.env.API_INTERNAL_URL || "http://127.0.0.1:8001"}/api/v1/catalog/products/${encodeURIComponent(route[1])}/`,
-        { next: { revalidate: 60 } },
+        {
+          headers: { "X-Forwarded-Proto": "https" },
+          next: { revalidate: 60 },
+        },
       );
       if (response.ok) {
         const product = await response.json();

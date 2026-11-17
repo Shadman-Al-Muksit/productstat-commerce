@@ -5,6 +5,7 @@ from django.db import models
 from django.db.models import F, Q
 from django.db.models.functions import Lower
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ValidationError as ModelValidationError
 
 ZERO = Decimal('0.00')
 
@@ -148,6 +149,32 @@ class Payment(models.Model):
     settled_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         constraints = [models.CheckConstraint(condition=Q(amount__gte=0,settled_amount__gte=0)&Q(settled_amount__lte=F('amount')),name='payment_valid_amounts')]
+
+class SettlementQuerySet(models.QuerySet):
+    def update(self,**kwargs):
+        raise ModelValidationError('Settlement events are immutable. Record a separate correcting event through a reviewed reconciliation process.')
+    def delete(self):
+        raise ModelValidationError('Settlement events cannot be deleted.')
+
+class PaymentSettlement(models.Model):
+    """An observed cash settlement increment, never a cumulative activity measure."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name='settlements')
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    settled_at = models.DateTimeField(null=True,blank=True,db_index=True)
+    reference = models.CharField(max_length=200)
+    actor = models.ForeignKey(User,null=True,blank=True,on_delete=models.SET_NULL)
+    source = models.CharField(max_length=30,default='live',choices=[(value,value) for value in ['live','audit_backfill','legacy_aggregate','import','demo']])
+    created_at = models.DateTimeField(auto_now_add=True)
+    objects = SettlementQuerySet.as_manager()
+    class Meta:
+        constraints = [models.CheckConstraint(condition=Q(amount__gt=0),name='settlement_positive_amount'),models.UniqueConstraint(fields=['payment','reference'],name='settlement_payment_reference_unique'),models.CheckConstraint(condition=Q(settled_at__isnull=False)|Q(source='legacy_aggregate'),name='settlement_observed_date_required')]
+    def save(self,*args,**kwargs):
+        if not self._state.adding:
+            raise ModelValidationError('Settlement events are immutable.')
+        return super().save(*args,**kwargs)
+    def delete(self,*args,**kwargs):
+        raise ModelValidationError('Settlement events cannot be deleted.')
 
 class ReturnRequest(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

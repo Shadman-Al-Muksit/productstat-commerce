@@ -10,7 +10,7 @@ from django.db import connection, transaction
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
-from .models import (AuditEvent,CompanySettings,DeliveryZone,Order,OrderLine,OutboxEvent,Payment,Refund,RefundLine,ReturnRequest,ReturnLine,Shipment,ShipmentLine,SKU,StockMovement)
+from .models import (AuditEvent,CompanySettings,DeliveryZone,Order,OrderLine,OutboxEvent,Payment,PaymentSettlement,Refund,RefundLine,ReturnRequest,ReturnLine,Shipment,ShipmentLine,SKU,StockMovement)
 
 def money(value):
     try:
@@ -270,8 +270,16 @@ def order_action(order_id,action,data,actor):
             if amount!=due: raise ValidationError(f'The expected COD collection is {due:.2f}.')
             payment.amount=amount;payment.status='successful';payment.collected_at=now
         else:
+            reference=str(data.get('reference','')).strip()
+            if len(reference)>200: raise ValidationError('Settlement reference must be at most 200 characters.')
+            previous=payment.settlements.filter(reference=reference).first()
+            if previous:
+                if previous.amount!=amount:
+                    raise ValidationError('This settlement reference was already used with a different amount.')
+                return order
             if payment.status!='successful' or amount<=0 or payment.settled_amount+amount>payment.amount:
                 raise ValidationError('Settlement must be positive and cannot exceed collected cash.')
+            PaymentSettlement.objects.create(payment=payment,amount=amount,settled_at=now,reference=reference,actor=actor,source='live')
             payment.settled_amount+=amount;payment.settled_at=now
         payment.save()
     else:

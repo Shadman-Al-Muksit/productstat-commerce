@@ -12,7 +12,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
-from commerce.models import CompanySettings,DeliveryZone,Order,OrderLine,Product,SKU,User,Refund,RefundLine,StockMovement,Payment,ReturnRequest,OutboxEvent
+from commerce.models import CompanySettings,DeliveryZone,Order,OrderLine,Product,SKU,User,Refund,RefundLine,StockMovement,Payment,PaymentSettlement,ReturnRequest,OutboxEvent,AuditEvent
 from commerce import services,payments
 
 pytestmark=pytest.mark.django_db
@@ -70,6 +70,64 @@ def test_partial_cancellation_cod_collection_and_settlement(catalog,payload,admi
     payment=order.payments.get();assert payment.amount==Decimal('2090') and payment.settled_amount==Decimal('2000')
     with pytest.raises(ValidationError): services.order_action(order.id,'settle_cod',{'amount':'100.00','reference':'bank-2'},admin)
     sku=catalog[2];sku.refresh_from_db();assert sku.on_hand==8 and sku.reserved==0
+
+def test_partial_settlements_keep_original_dates_and_references(catalog,payload,admin):
+    from commerce.reporting import cash_activity
+    from django.utils import timezone as clock
+    order=place(catalog,payload);deliver(order,admin)
+    services.order_action(order.id,'collect_cod',{'amount':'3090','reference':'collected'},admin)
+    day_one=clock.now()-timedelta(days=2);day_two=day_one+timedelta(days=1)
+    with patch('commerce.services.timezone.now',return_value=day_one):
+        services.order_action(order.id,'settle_cod',{'amount':'1000','reference':'bank-day-1'},admin)
+    with patch('commerce.services.timezone.now',return_value=day_two):
+        services.order_action(order.id,'settle_cod',{'amount':'2090','reference':'bank-day-2'},admin)
+        services.order_action(order.id,'settle_cod',{'amount':'2090','reference':'bank-day-2'},admin)
+    payment=order.payments.get();assert payment.settled_amount==Decimal('3090') and payment.settled_at==day_two
+    assert payment.settlements.count()==2
+    assert payment.settlements.get(reference='bank-day-1').settled_at==day_one
+    for date,amount in [(clock.localdate(day_one),Decimal('1000')),(clock.localdate(day_two),Decimal('2090'))]:
+        cash=cash_activity({'start':date,'end':date,'product_ids':[]})
+        assert Decimal(cash['settled_amount'])==amount
+    with pytest.raises(ValidationError):
+        services.order_action(order.id,'settle_cod',{'amount':'100','reference':'bank-day-2'},admin)
+    assert payment.settlements.count()==2
+    assert AuditEvent.objects.filter(event='settle_cod',reference=str(order.id)).count()==2
+
+def test_settlement_events_are_immutable_and_positive(catalog,payload,admin):
+    from django.core.exceptions import ValidationError as ModelValidationError
+    order=place(catalog,payload);deliver(order,admin)
+    services.order_action(order.id,'collect_cod',{'amount':'3090','reference':'collection'},admin)
+    services.order_action(order.id,'settle_cod',{'amount':'1000','reference':'bank-1'},admin)
+    event=order.payments.get().settlements.get()
+    event.amount=Decimal('1')
+    with pytest.raises(ModelValidationError): event.save()
+    with pytest.raises(ModelValidationError): PaymentSettlement.objects.filter(pk=event.pk).update(amount=Decimal('1'))
+    with pytest.raises(ModelValidationError): event.delete()
+    with pytest.raises(IntegrityError),transaction.atomic():
+        PaymentSettlement.objects.create(payment=event.payment,amount=0,settled_at=timezone.now(),reference='invalid-zero')
+
+def test_settlement_backfill_recovers_reconciled_audits_and_labels_legacy(catalog,payload,admin):
+    import importlib
+    from django.apps import apps
+    from types import SimpleNamespace
+    observed=timezone.now()-timedelta(days=1)
+    recovered=place(catalog,payload,key='recover-audits');payment=recovered.payments.get()
+    payment.status='successful';payment.collected_at=observed-timedelta(days=2);payment.settled_amount=Decimal('300');payment.settled_at=observed;payment.save()
+    first=AuditEvent.objects.create(event='settle_cod',entity='order',reference=str(recovered.id),actor=admin,details={'amount':'100.00','reference':'first-reference'})
+    second=AuditEvent.objects.create(event='settle_cod',entity='order',reference=str(recovered.id),actor=admin,details={'amount':'200.00','reference':'second-reference'})
+    legacy=place(catalog,payload,quantity=1,key='legacy-snapshot');legacy.is_historical=True;legacy.save()
+    historical=legacy.payments.get();historical.settled_amount=Decimal('50');historical.settled_at=observed;historical.save()
+    incomplete=place(catalog,payload,quantity=1,key='incomplete-audit');partial=incomplete.payments.get();partial.settled_amount=Decimal('90');partial.settled_at=None;partial.save()
+    AuditEvent.objects.create(event='settle_cod',entity='order',reference=str(incomplete.id),details={'amount':'10','reference':'incomplete'})
+    migration=importlib.import_module('commerce.migrations.0004_backfill_payment_settlements')
+    migration.backfill_settlements(apps,SimpleNamespace(connection=connection))
+    events=list(payment.settlements.order_by('settled_at'))
+    assert [(event.amount,event.reference,event.source) for event in events]==[(Decimal('100'),'first-reference','audit_backfill'),(Decimal('200'),'second-reference','audit_backfill')]
+    assert events[0].settled_at==first.created_at and events[1].settled_at==second.created_at
+    fallback=historical.settlements.get();assert fallback.amount==Decimal('50') and fallback.settled_at==observed and fallback.source=='legacy_aggregate'
+    unknown=partial.settlements.get();assert unknown.amount==Decimal('90') and unknown.settled_at is None and unknown.source=='legacy_aggregate'
+    migration.backfill_settlements(apps,SimpleNamespace(connection=connection))
+    assert PaymentSettlement.objects.count()==4
 
 def test_partial_return_restock_refund_and_replay(catalog,payload,admin):
     order=place(catalog,payload);deliver(order,admin)

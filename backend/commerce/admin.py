@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.db import transaction
-from .models import User,Product,SKU,Order,OrderLine,Shipment,Payment,ReturnRequest,Refund,StockMovement,AuditEvent,CompanySettings,DeliveryZone
+from .models import User,Product,SKU,Order,OrderLine,Shipment,Payment,PaymentSettlement,ReturnRequest,Refund,StockMovement,AuditEvent,CompanySettings,DeliveryZone
 from .services import audit
 
 class AuditedAdminMixin:
@@ -30,11 +30,15 @@ class ReadOnlyAdmin(admin.ModelAdmin):
     def has_change_permission(self,request,obj=None): return False
     def has_delete_permission(self,request,obj=None): return False
 
-for model in [Order,OrderLine,Shipment,Payment,ReturnRequest,Refund,StockMovement,AuditEvent,SKU]:
+for model in [Order,OrderLine,Shipment,Payment,PaymentSettlement,ReturnRequest,Refund,StockMovement,AuditEvent,SKU]:
     admin.site.register(model,ReadOnlyAdmin)
 class AuditedAdmin(AuditedAdminMixin,admin.ModelAdmin):
     pass
 
 admin.site.register(Product,AuditedAdmin)
-admin.site.register(CompanySettings,AuditedAdmin)
+@admin.register(CompanySettings)
+class CompanySettingsAdmin(AuditedAdmin):
+    readonly_fields=('currency','timezone')
+    def has_add_permission(self,request):
+        return not CompanySettings.objects.exists() and super().has_add_permission(request)
 admin.site.register(DeliveryZone,AuditedAdmin)

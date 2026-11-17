@@ -14,7 +14,7 @@ from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
-from .models import (AuditEvent, ImportBatch, Order, OrderLine, Payment, Product, Refund,
+from .models import (AuditEvent, ImportBatch, Order, OrderLine, Payment, PaymentSettlement, Product, Refund,
                      RefundLine, ReturnLine, ReturnRequest, Shipment, ShipmentLine, SKU, StockMovement)
 
 MAX_BYTES = 10 * 1024 * 1024
@@ -556,6 +556,9 @@ def _create_history_order(source, external_id, rows):
                                              settled_amount=_decimal(event, "settled_amount"), settled_at=_timestamp(event, "settled_at"),
                                              provider_transaction_id="import:" + __import__("hashlib").sha256(f"{source}:{external_id}:{event_id}".encode()).hexdigest())
             Payment.objects.filter(pk=payment.pk).update(created_at=ordered_at)
+            if payment.settled_amount:
+                PaymentSettlement.objects.create(payment=payment, amount=payment.settled_amount, settled_at=payment.settled_at,
+                                                  reference=f"import:{event_id}"[:200], source="import")
     order.subtotal = subtotal
     order.discount_total = discounts
     order.tax_total = taxes

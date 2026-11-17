@@ -12,9 +12,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from commerce.models import AuditEvent, DeliveryZone, ImportBatch, Order, OrderLine, Payment, Product, Refund, RefundLine, ReturnLine, ReturnRequest, Shipment, ShipmentLine
+from commerce.models import AuditEvent, DeliveryZone, ImportBatch, Order, OrderLine, Payment, PaymentSettlement, Product, Refund, RefundLine, ReturnLine, ReturnRequest, Shipment, ShipmentLine
 from commerce.models import SKU
-from commerce.reporting import analytics, filters_from_params
+from commerce.reporting import analytics, cash_activity, filters_from_params
 from commerce.imports import SCHEMAS, commit_batch, stage_upload, validate_batch
 
 TZ = ZoneInfo("Asia/Dhaka")
@@ -53,8 +53,9 @@ def reference_data(db):
     shipment = Shipment.objects.create(order=second, state="delivered", dispatched_at=second.created_at,
                                         delivered_at=second_line.delivered_at, completed_at=second_line.delivered_at)
     ShipmentLine.objects.create(shipment=shipment, order_line=second_line, quantity=2)
-    Payment.objects.create(order=second, method="cod", status="successful", amount=110,
+    payment = Payment.objects.create(order=second, method="cod", status="successful", amount=110,
                            collected_at=at("2026-01-06T12:00:00"), settled_amount=110, settled_at=at("2026-01-07T12:00:00"))
+    PaymentSettlement.objects.create(payment=payment, amount=110, settled_at=payment.settled_at, reference="reference-settlement", source="demo")
     return product
 
 
@@ -130,6 +131,36 @@ def test_verified_exception_receipts_are_visible_separately(reference_data):
     assert result["cash"]["exception_collected_amount"] == "25.00"
     assert result["cash"]["sandbox_collected_amount"] == "25.00"
     assert result["cash"]["settled_amount"] == "110.00"
+
+
+def test_partial_settlements_keep_each_transfer_in_its_actual_period(reference_data):
+    order = Order.objects.create(number="PARTIAL-CASH", customer_name="Synthetic", email="", phone="", created_at=at("2026-01-01T12:00:00"))
+    payment = Payment.objects.create(order=order, method="cod", status="successful", amount=100,
+                                     collected_at=at("2026-01-02T12:00:00"), settled_amount=100, settled_at=at("2026-01-09T12:00:00"))
+    PaymentSettlement.objects.create(payment=payment, amount=40, settled_at=at("2026-01-08T12:00:00"), reference="TRANSFER-1", source="live")
+    PaymentSettlement.objects.create(payment=payment, amount=60, settled_at=at("2026-01-09T12:00:00"), reference="TRANSFER-2", source="live")
+    first_day = cash_activity(filters_from_params({"start": "2026-01-08", "end": "2026-01-08"}))
+    second_day = cash_activity(filters_from_params({"start": "2026-01-09", "end": "2026-01-09"}))
+    both_days = cash_activity(filters_from_params({"start": "2026-01-08", "end": "2026-01-09"}))
+    assert first_day["settled_amount"] == "40.00"
+    assert second_day["settled_amount"] == "60.00"
+    assert both_days["settled_amount"] == "100.00"
+
+
+@pytest.mark.django_db
+def test_fresh_demo_seed_creates_settlement_events_and_repeat_does_not_duplicate(settings):
+    from django.core.management import call_command
+    from django.db.models import Sum
+    settings.DEBUG = True
+    settings.PRODUCTSTAT_DEMO = True
+    output = io.StringIO()
+    call_command("seed_demo", orders=20, skus=5, as_of="2026-11-15", stdout=output)
+    count = PaymentSettlement.objects.count()
+    assert count > 0
+    assert set(PaymentSettlement.objects.values_list("source", flat=True)) == {"demo"}
+    assert PaymentSettlement.objects.aggregate(total=Sum("amount"))["total"] == Payment.objects.aggregate(total=Sum("settled_amount"))["total"]
+    call_command("seed_demo", orders=20, skus=5, as_of="2026-11-15", stdout=output)
+    assert PaymentSettlement.objects.count() == count
 
 
 def staff_client():
@@ -230,6 +261,15 @@ def test_purchase_delivery_return_and_refund_immediately_refresh_http_cache(refe
         assert client.post(f"/api/v1/staff/orders/{order['id']}/action/", {"action": action, "carrier": "Test", "tracking_number": "CACHE"}, format="json").status_code == 200
     assert client.get(url).json()["summary"]["delivered_units"] == 1
     assert client.post(f"/api/v1/staff/orders/{order['id']}/action/", {"action": "collect_cod", "amount": "100.00", "reference": "CACHE-RECEIPT"}, format="json").status_code == 200
+    assert client.post(f"/api/v1/staff/orders/{order['id']}/action/", {"action": "settle_cod", "amount": "40.00", "reference": "CACHE-SETTLE-1"}, format="json").status_code == 200
+    first_settlement = client.get(url)
+    assert first_settlement["X-Analytics-Cache"] == "MISS"
+    assert first_settlement.json()["cash"]["settled_amount"] == "40.00"
+    assert client.get(url)["X-Analytics-Cache"] == "HIT"
+    assert client.post(f"/api/v1/staff/orders/{order['id']}/action/", {"action": "settle_cod", "amount": "60.00", "reference": "CACHE-SETTLE-2"}, format="json").status_code == 200
+    second_settlement = client.get(url)
+    assert second_settlement["X-Analytics-Cache"] == "MISS"
+    assert second_settlement.json()["cash"]["settled_amount"] == "100.00"
     requested = client.post(f"/api/v1/orders/{order['id']}/returns/", {"reason": "Synthetic verification", "lines": [{"order_line_id": order['lines'][0]['id'], "quantity": 1}]}, format="json")
     assert requested.status_code == 201, requested.json()
     returned = requested.json()

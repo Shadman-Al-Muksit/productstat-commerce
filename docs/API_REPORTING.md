@@ -22,6 +22,8 @@ All endpoints are below `/api/v1/`. Analytics permits the administrator, operato
 
 Activity returns and cohort returns intentionally differ: January delivery-cohort returns can be accepted in February. `preliminary` flags deliveries still inside the configured return window. Zero denominators yield `null` rates. The equal-length previous interval supplies comparison values; a zero prior value yields `null` percent change. Cash totals remain company-wide when products are selected, because actual payments include order-level shipping and tax. Verified exception receipts are included and separately identified as refund obligations. Refund merchandise amounts subtract immutable tax/shipping allocations from cash refund-line amounts.
 
+`cash.settled_amount` sums individual settlement events in the interval; it never sums a payment's cumulative balance on its latest timestamp. Legacy aggregate settlement events retain explicitly limited historical provenance, described in `METRICS.md`.
+
 HTTP overviews use a shared cache for up to 30 seconds, invalidated by committed business audit/import revisions. `meta.generated_at` and cohort `as_of` remain the actual calculation times on cache hits. `X-Analytics-Cache` indicates `HIT`, `MISS`, `WAIT-HIT`, `BYPASS`, or `LOCK-TIMEOUT`; browsers/proxies receive `Cache-Control: private, no-store`. Redis errors fall back to the database. Drill-down/export are uncached. Direct analytical function calls also remain uncached for reconciliation and fixtures.
 
 `GET analytics/drilldown/?metric=delivered_units&start=...&end=...&page=1&page_size=50`

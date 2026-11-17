@@ -320,18 +320,19 @@ def drilldown(filters, metric):
 
 def cash_activity(filters):
     Payment = apps.get_model("commerce", "Payment")
+    PaymentSettlement = apps.get_model("commerce", "PaymentSettlement")
     lo, hi = bounds(filters["start"], filters["end"])
     collected = Payment.objects.filter(status__in=["successful", "exception"], collected_at__gte=lo, collected_at__lt=hi)
-    settled = Payment.objects.filter(status__in=["successful", "exception"], settled_at__gte=lo, settled_at__lt=hi)
+    settled = PaymentSettlement.objects.filter(settled_at__gte=lo, settled_at__lt=hi)
     total = collected.aggregate(value=Sum("amount"))["value"] or ZERO
     cod = collected.filter(method="cod").aggregate(value=Sum("amount"))["value"] or ZERO
-    settlement = settled.aggregate(value=Sum("settled_amount"))["value"] or ZERO
+    settlement = settled.aggregate(value=Sum("amount"))["value"] or ZERO
     exceptions = collected.filter(status="exception").aggregate(value=Sum("amount"))["value"] or ZERO
     sandbox = collected.filter(is_sandbox=True).aggregate(value=Sum("amount"))["value"] or ZERO
     return {"scope": "company", "product_filter_applied": False, "collected_amount": money(total),
             "cod_collected_amount": money(cod), "online_collected_amount": money(total - cod),
             "settled_amount": money(settlement), "exception_collected_amount": money(exceptions), "sandbox_collected_amount": money(sandbox),
-            "basis": "Recorded cash event dates, includes shipping and tax; always company-wide. Exception receipts remain refund obligations. Sandbox/demo records are not real funds."}
+            "basis": "Recorded collection dates and individual settlement event dates, includes shipping and tax; always company-wide. Exception receipts remain refund obligations. Sandbox/demo records are not real funds."}
 
 
 def delivery_activity(filters):
