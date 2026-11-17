@@ -78,6 +78,7 @@ jobs:
       - run: docker build -f deploy/backup.Dockerfile -t productstat-backup .
       - run: python3 deploy/ci-env.py
       - run: docker compose --env-file .env.production config --quiet
+      - run: docker run --rm -e PUBLIC_DOMAIN=localhost -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - run: docker compose --env-file .env.production up -d --build --wait --wait-timeout 120
       - run: docker compose --env-file .env.production exec -T backend python manage.py seed_demo --small
       - run: python3 scripts/container-smoke.py --base https://localhost --allow-self-signed
@@ -91,6 +92,8 @@ jobs:
           docker compose --env-file .env.production --profile maintenance run --rm backup scripts/verify_restore.py "/backups/$(basename "$backup")"
       - run: docker compose --env-file .env.production ps
         if: always()
+      - run: docker compose --env-file .env.production logs --tail 120 caddy backend frontend
+        if: failure()
       - uses: actions/upload-artifact@v4
         if: always()
         with:

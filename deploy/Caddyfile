@@ -1,6 +1,8 @@
 {$PUBLIC_DOMAIN} {
   encode zstd gzip
-  request_body { max_size 11MB }
+  request_body {
+    max_size 11MB
+  }
   handle /api/* {
     reverse_proxy backend:8001
   }
