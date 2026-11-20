@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
   title: {
-    default: "ProductStat — Thoughtful goods. Clearer decisions.",
+    default: "ProductStat — Electronics & gadgets in Bangladesh",
     template: "%s · ProductStat",
   },
   description:
-    "A Bangladesh commerce platform with transparent product performance, domestic delivery and carefully chosen everyday goods.",
+    "Shop laptops, mobile devices, audio, tools and gadgets in Bangladesh. Compare finishes, track orders and explore transparent product performance with ProductStat.",
 };
 export default function RootLayout({
   children,

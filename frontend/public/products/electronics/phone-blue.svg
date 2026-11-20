@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500" fill="none" role="img" aria-label="Blue phone"><defs>
+      <linearGradient id="pbody" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#7fa3c1"/><stop offset=".38" stop-color="#416d94"/><stop offset="1" stop-color="#1c3f61"/></linearGradient>
+      <linearGradient id="pmetal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b0d2eb"/><stop offset=".28" stop-color="#416d94"/><stop offset=".68" stop-color="#7fa3c1"/><stop offset="1" stop-color="#1c3f61"/></linearGradient>
+      <linearGradient id="pscreen" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#071a2b"/><stop offset=".48" stop-color="#075e68"/><stop offset="1" stop-color="#63c6c0"/></linearGradient>
+      <linearGradient id="pglass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#223d4b"/><stop offset=".52" stop-color="#06111e"/><stop offset="1" stop-color="#142c3d"/></linearGradient>
+      <radialGradient id="plens"><stop stop-color="#429b9b"/><stop offset=".19" stop-color="#0a3b53"/><stop offset=".35" stop-color="#172b44"/><stop offset=".55" stop-color="#020b15"/><stop offset=".76" stop-color="#274d63"/><stop offset="1" stop-color="#080e16"/></radialGradient>
+      <filter id="pshadow" x="-50%" y="-150%" width="200%" height="400%"><feGaussianBlur stdDeviation="10"/></filter>
+      <pattern id="pmesh" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill="#0a1119" opacity=".75"/><circle cx="5.5" cy="5.5" r=".9" fill="#d8e2eb" opacity=".22"/></pattern>
+      <pattern id="pknurl" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 0v5" stroke="#9cabb6" stroke-opacity=".3" stroke-width="2"/></pattern>
+    </defs><ellipse cx="300" cy="424" rx="187" ry="14" fill="#152a3d" opacity=".17" filter="url(#pshadow)"/><g transform="rotate(12 355 255)">
+              <rect x="300" y="72" width="157" height="340" rx="27" fill="url(#pmetal)" stroke="#b0d2eb" stroke-width="2"/>
+              <rect x="311" y="83" width="72" height="82" rx="19" fill="#416d94" stroke="#b0d2eb" stroke-opacity=".6"/>
+              <circle cx="331" cy="106" r="13" fill="#0e1821" stroke="#1c3f61" stroke-width="4"/><circle cx="361" cy="139" r="13" fill="#101a22" stroke="#1c3f61" stroke-width="4"/>
+              <circle cx="332" cy="106" r="6" fill="url(#plens)"/><circle cx="361" cy="139" r="6" fill="url(#plens)"/><circle cx="361" cy="104" r="5" fill="#ecebdf"/>
+              <path d="M456 156v46m-155-66v25" stroke="#1c3f61" stroke-width="3"/>
+            </g><g transform="rotate(-7 248 260)">
+              <rect x="154" y="67" width="166" height="354" rx="28" fill="url(#pmetal)" stroke="#b0d2eb" stroke-width="1.5"/>
+              <rect x="159" y="72" width="156" height="344" rx="25" fill="#08121e"/>
+              <rect x="165" y="79" width="144" height="330" rx="21" fill="url(#pscreen)"/>
+              <path d="M165 339c14-103 117-146 144-211v151c-50 38-78 79-89 130h-55Z" fill="#7dd7d1" opacity=".4"/>
+              <path d="M165 226c42 10 87 120 144 125v58H165Z" fill="#091c38" opacity=".5"/>
+              <rect x="208" y="88" width="59" height="15" rx="8" fill="#09131f"/><circle cx="257" cy="95" r="3" fill="#263e4a"/>
+              <rect x="213" y="397" width="48" height="3" rx="1.5" fill="#d8f0ed" opacity=".8"/>
+            </g></svg>

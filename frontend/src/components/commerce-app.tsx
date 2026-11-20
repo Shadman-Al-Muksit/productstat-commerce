@@ -6,10 +6,10 @@ import {
   useState,
   useCallback,
 } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ShoppingBag,
+  ShoppingCart,
   Search,
   ArrowUpRight,
   LayoutDashboard,
@@ -24,6 +24,8 @@ import {
   X,
   Store,
   RotateCcw,
+  UserRound,
+  PanelsTopLeft,
 } from "lucide-react";
 import { api, setCsrf, Bootstrap, Cart } from "@/lib/api";
 import { Loading, Notice } from "./ui";
@@ -54,7 +56,7 @@ export function useApp() {
 }
 const navigation = [
   { href: "/staff", label: "Overview", icon: LayoutDashboard },
-  { href: "/staff/orders", label: "Orders", icon: ShoppingBag },
+  { href: "/staff/orders", label: "Orders", icon: ShoppingCart },
   { href: "/staff/products", label: "Products & stock", icon: Package },
   { href: "/staff/returns", label: "Returns & refunds", icon: RotateCcw },
   { href: "/analytics", label: "Product intelligence", icon: BarChart3 },
@@ -64,11 +66,47 @@ const navigation = [
 ];
 export default function CommerceApp() {
   const pathname = usePathname();
+  const router = useRouter();
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [cart, setCart] = useState<Cart>({ items: [], subtotal: "0.00" });
   const [error, setError] = useState("");
   const [language, setLanguage] = useState<"en" | "bn">("en");
   const [menu, setMenu] = useState(false);
+  const [storeSearch, setStoreSearch] = useState("");
+  function navigateCatalog(query = "", category = "") {
+    const params = new URLSearchParams(
+      pathname === "/" ? window.location.search : "",
+    );
+    params.delete("q");
+    params.delete("category");
+    params.delete("page");
+    if (query.trim()) params.set("q", query.trim());
+    if (category) params.set("category", category);
+    const href = `/${params.size ? `?${params}` : ""}#collection`;
+    if (pathname === "/") {
+      window.history.pushState(null, "", href);
+      window.dispatchEvent(new Event("productstat:catalog-search"));
+      document
+        .getElementById("collection")
+        ?.scrollIntoView({ behavior: "smooth" });
+    } else router.push(href);
+  }
+  useEffect(() => {
+    function syncStoreSearch() {
+      setStoreSearch(
+        pathname === "/"
+          ? new URLSearchParams(window.location.search).get("q") || ""
+          : "",
+      );
+    }
+    syncStoreSearch();
+    window.addEventListener("productstat:catalog-search", syncStoreSearch);
+    window.addEventListener("popstate", syncStoreSearch);
+    return () => {
+      window.removeEventListener("productstat:catalog-search", syncStoreSearch);
+      window.removeEventListener("popstate", syncStoreSearch);
+    };
+  }, [pathname]);
   const refresh = useCallback(async () => {
     const data = await api<Bootstrap>("bootstrap/");
     setCsrf(data.csrfToken);
@@ -96,7 +134,10 @@ export default function CommerceApp() {
     return (
       <div className="startup">
         <Link href="/" className="wordmark">
-          <span className="brand-mark">p</span>productstat
+          <span className="brand-mark">
+            <ShoppingCart size={23} strokeWidth={2.2} aria-hidden="true" />
+          </span>
+          ProductStat
           <span className="brand-dot">.</span>
         </Link>
         {error ? (
@@ -183,7 +224,10 @@ export default function CommerceApp() {
         <div className="workspace">
           <aside className={`sidebar ${menu ? "open" : ""}`}>
             <Link href="/" className="wordmark">
-              <span className="brand-mark">p</span>productstat
+              <span className="brand-mark">
+                <ShoppingCart size={23} strokeWidth={2.2} aria-hidden="true" />
+              </span>
+              ProductStat
               <span className="brand-dot">.</span>
             </Link>
             <div className="workspace-label">COMMERCE WORKSPACE</div>
@@ -278,8 +322,8 @@ export default function CommerceApp() {
           <div className="announcement">
             <span>
               {language === "en"
-                ? "Thoughtfully chosen. Delivered across Bangladesh."
-                : "বাছাই করা পণ্য। সারা বাংলাদেশে ডেলিভারি।"}
+                ? "Electronics & gadgets. Delivered across Bangladesh."
+                : "ইলেকট্রনিকস ও গ্যাজেট। সারা বাংলাদেশে ডেলিভারি।"}
             </span>
             <span className="announcement-demo">
               {bootstrap.demo
@@ -290,22 +334,50 @@ export default function CommerceApp() {
           <header className="store-header">
             <div className="store-header-inner">
               <Link href="/" className="wordmark">
-                <span className="brand-mark">p</span>productstat
+                <span className="brand-mark">
+                  <ShoppingCart
+                    size={25}
+                    strokeWidth={2.2}
+                    aria-hidden="true"
+                  />
+                </span>
+                ProductStat
                 <span className="brand-dot">.</span>
               </Link>
-              <nav className="store-nav">
-                <Link href="/">
-                  {language === "en" ? "Shop collection" : "পণ্যসমূহ"}
-                </Link>
-                <Link href="/track">
-                  {language === "en" ? "Track an order" : "অর্ডার ট্র্যাক"}
-                </Link>
-                <Link href="/analytics" className="workspace-link">
-                  Workspace
-                  <ArrowUpRight size={14} />
-                </Link>
-              </nav>
+              <form
+                className="header-search"
+                role="search"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  navigateCatalog(storeSearch);
+                }}
+              >
+                <input
+                  aria-label={
+                    language === "en" ? "Search entire store" : "সব পণ্য খুঁজুন"
+                  }
+                  placeholder={
+                    language === "en"
+                      ? "Search laptops, phones, headphones and more…"
+                      : "ল্যাপটপ, মোবাইল, হেডফোন খুঁজুন…"
+                  }
+                  value={storeSearch}
+                  onChange={(event) => setStoreSearch(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  aria-label={language === "en" ? "Search store" : "খুঁজুন"}
+                >
+                  <Search size={21} />
+                </button>
+              </form>
               <div className="store-actions">
+                <Link href="/track" className="header-track">
+                  <Truck size={19} />
+                  <span>
+                    {language === "en" ? "Track order" : "অর্ডার ট্র্যাক"}
+                  </span>
+                </Link>
                 <button
                   className="language-switch"
                   onClick={() => setLanguage(language === "en" ? "bn" : "en")}
@@ -314,37 +386,112 @@ export default function CommerceApp() {
                   {language === "en" ? "বাংলা" : "EN"}
                 </button>
                 <Link href="/account" className="account-link">
-                  {bootstrap.user
-                    ? bootstrap.user.username
-                    : language === "en"
-                      ? "Account"
-                      : "অ্যাকাউন্ট"}
+                  <UserRound size={19} />
+                  <span>
+                    {bootstrap.user
+                      ? bootstrap.user.username
+                      : language === "en"
+                        ? "Sign in"
+                        : "অ্যাকাউন্ট"}
+                  </span>
                 </Link>
                 <Link
                   href="/cart"
                   className="cart-link"
-                  aria-label={`Shopping bag, ${count} items`}
+                  aria-label={
+                    language === "en"
+                      ? `Shopping cart, ${count} ${count === 1 ? "item" : "items"}`
+                      : `শপিং কার্টে ${count}টি পণ্য`
+                  }
                 >
-                  <ShoppingBag size={21} />
-                  <span className="cart-count">{count}</span>
+                  <span className="cart-icon-wrap">
+                    <ShoppingCart size={25} />
+                    {count > 0 && (
+                      <span
+                        className="cart-count"
+                        data-testid="cart-count"
+                        aria-hidden="true"
+                      >
+                        {count > 99 ? "99+" : count}
+                      </span>
+                    )}
+                  </span>
+                  <span className="cart-label">
+                    {language === "en" ? "Cart" : "কার্ট"}
+                  </span>
                 </Link>
               </div>
+            </div>
+            <div className="store-nav-bar">
+              <nav
+                className="store-nav"
+                aria-label={
+                  language === "en" ? "Product categories" : "পণ্যের বিভাগ"
+                }
+              >
+                <a
+                  href="/#collection"
+                  className="all-categories"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    navigateCatalog();
+                  }}
+                >
+                  <PanelsTopLeft size={17} />
+                  {language === "en" ? "Shop by category" : "সব বিভাগ"}
+                </a>
+                {[
+                  ["Laptops & PCs", "ল্যাপটপ ও পিসি"],
+                  ["Mobile & Tablets", "মোবাইল ও ট্যাবলেট"],
+                  ["Audio", "অডিও"],
+                  ["Cameras", "ক্যামেরা"],
+                  ["Smart Home", "স্মার্ট হোম"],
+                  ["Tools & Gadgets", "টুলস ও গ্যাজেট"],
+                  ["Accessories", "অ্যাকসেসরিজ"],
+                ].map(([name, bangla]) => (
+                  <a
+                    key={name}
+                    href={`/?category=${encodeURIComponent(name)}#collection`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      navigateCatalog("", name);
+                    }}
+                  >
+                    {language === "en" ? name : bangla}
+                  </a>
+                ))}
+                <Link href="/analytics" className="workspace-link">
+                  {language === "en" ? "Workspace" : "ওয়ার্কস্পেস"}
+                  <ArrowUpRight size={15} />
+                </Link>
+              </nav>
             </div>
           </header>
           <main>{body}</main>
           <footer className="store-footer">
             <div>
               <Link href="/" className="wordmark">
-                productstat<span className="brand-dot">.</span>
+                <span className="brand-mark">
+                  <ShoppingCart
+                    size={23}
+                    strokeWidth={2.2}
+                    aria-hidden="true"
+                  />
+                </span>
+                ProductStat<span className="brand-dot">.</span>
               </Link>
-              <p>Thoughtful goods. Clearer decisions.</p>
+              <p>
+                {language === "en"
+                  ? "Your next upgrade starts here."
+                  : "আপনার পরবর্তী আপগ্রেড এখানেই।"}
+              </p>
               <small>
                 A complete commerce & product intelligence demonstration.
               </small>
             </div>
             <div>
               <strong>Explore</strong>
-              <Link href="/">The collection</Link>
+              <Link href="/">Electronics & gadgets</Link>
               <Link href="/track">Order tracking</Link>
               <Link href="/account">Your account</Link>
             </div>
@@ -356,11 +503,11 @@ export default function CommerceApp() {
             </div>
             <div className="footer-note">
               <span className="live-dot" />
-              Built for everyday commerce.
+              Electronics. With a clearer picture.
               <small>
                 {bootstrap.demo
                   ? "Demonstration only. No real purchases or fulfilment."
-                  : "Considered goods, delivered across Bangladesh."}
+                  : "Electronics, delivered across Bangladesh."}
               </small>
             </div>
           </footer>

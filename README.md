@@ -2,11 +2,11 @@
 
 [![Verify ProductStat](https://github.com/Shadman-Al-Muksit/productstat-commerce/actions/workflows/verify.yml/badge.svg)](https://github.com/Shadman-Al-Muksit/productstat-commerce/actions/workflows/verify.yml)
 
-A Bangladesh e-commerce platform connecting a customer storefront, staff operations and auditable product analytics. Built for one company, BDT and domestic physical-goods delivery.
+A Bangladesh electronics store connecting a customer storefront, staff operations and auditable product analytics. Built for one company, BDT and domestic physical-goods delivery.
 
 The useful question is not only “what sold?” A manager can follow a product from ordered units to delivery outcomes, accepted returns and confirmed money movements, then inspect the contributing records.
 
-![ProductStat analytics workspace showing synthetic demonstration data](docs/screenshots/analytics-desktop.png)
+![ProductStat electronics storefront showing synthetic demonstration products](docs/screenshots/storefront-desktop.png)
 
 See the [release status](docs/RELEASE_STATUS.md) and [validation evidence](docs/VALIDATION.md) for the tested scope and operating limits.
 
@@ -29,6 +29,8 @@ For a local preview of the optimized frontend, run `npm run build` in `frontend`
 
 `seed_demo` creates 2,000 SKUs, 25,000 historical orders and 75,000 lines across a synthetic year. `--small` creates a smaller fresh-development fixture. Existing seeded history and live stock are not reset by repeated seeding. Never change fixture size by deleting business data.
 
+Fresh seeds contain electronics: laptops/PC accessories, phones/tablets, audio, cameras, smart home and tools/gadgets. To switch an existing mixed demo catalogue, preview `python manage.py curate_electronics` from `backend` with `scripts/env.sh` sourced, then use `--apply --actor administrator` to publish 14 products with 42 colour SKUs. The command archives previous listings, preserves stock and transaction history, and leaves existing curated prices/stock unchanged on repeated runs. See the [storefront update](docs/STOREFRONT.md).
+
 Local-only demonstration accounts:
 
 | Username | Role |
@@ -42,7 +44,7 @@ Local development password: `ProductStatDemo!2026`. Production seeding refuses t
 
 ## Supported workflows
 
-- English/Bangla storefront, catalogue search/filtering, variants, persistent cart, guest checkout and customer accounts.
+- English/Bangla electronics storefront, catalogue search/filtering, colour-specific product images, persistent cart, guest checkout and customer accounts. Larger typography, category tiles, a search-led header and a circular cart quantity badge support desktop and mobile use.
 - Server-validated prices/charges, atomic reservations, replay-safe checkout and private guest order links.
 - Staff preparation, dispatch, delivery failures, partial cancellation, COD collection and courier settlement.
 - Partial returns, receipt/inspection, stock disposition, refund obligations and verified refund recording.
@@ -75,7 +77,7 @@ bash scripts/load-test.sh             # 20 browsing sessions + five staff sessio
 
 With the application running, execute `npm run test:e2e` from `frontend`. On this WSL1 machine, use Windows Node with the installed Windows Playwright Chromium; the application/database still run in WSL. Set `PLAYWRIGHT_EXECUTABLE_PATH` if a browser location must be supplied.
 
-The final local checks passed: **136 backend tests, five browser journeys, dependency advisory checks and encrypted recovery**. The two-minute 25-user API run completed 2,767 requests without errors, with catalogue p95 **79 ms** and analytics p95 **1.956 s**. The [validation record](docs/VALIDATION.md) includes failed earlier candidates, cold-request maxima, cache conditions and deployment limits. A successful local demonstration is not evidence of a hosted production deployment.
+The initial release passed **136 backend tests, five browser journeys, dependency advisory checks and encrypted recovery**. The electronics update expands backend verification to **145 tests**; its browser results are recorded in the [validation record](docs/VALIDATION.md). The earlier two-minute 25-user API run completed 2,767 requests without errors, with catalogue p95 **79 ms** and analytics p95 **1.956 s**. Those performance measurements describe that earlier workload and environment. A successful local demonstration is not evidence of a hosted production deployment.
 
 ## Deployment boundary
 

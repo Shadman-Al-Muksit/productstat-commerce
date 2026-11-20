@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500" fill="none" role="img" aria-label="Black earbuds"><defs>
+      <linearGradient id="pbody" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#535e69"/><stop offset=".38" stop-color="#252b32"/><stop offset="1" stop-color="#10161d"/></linearGradient>
+      <linearGradient id="pmetal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#939ea9"/><stop offset=".28" stop-color="#252b32"/><stop offset=".68" stop-color="#535e69"/><stop offset="1" stop-color="#10161d"/></linearGradient>
+      <linearGradient id="pscreen" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#071a2b"/><stop offset=".48" stop-color="#075e68"/><stop offset="1" stop-color="#63c6c0"/></linearGradient>
+      <linearGradient id="pglass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#223d4b"/><stop offset=".52" stop-color="#06111e"/><stop offset="1" stop-color="#142c3d"/></linearGradient>
+      <radialGradient id="plens"><stop stop-color="#429b9b"/><stop offset=".19" stop-color="#0a3b53"/><stop offset=".35" stop-color="#172b44"/><stop offset=".55" stop-color="#020b15"/><stop offset=".76" stop-color="#274d63"/><stop offset="1" stop-color="#080e16"/></radialGradient>
+      <filter id="pshadow" x="-50%" y="-150%" width="200%" height="400%"><feGaussianBlur stdDeviation="10"/></filter>
+      <pattern id="pmesh" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill="#0a1119" opacity=".75"/><circle cx="5.5" cy="5.5" r=".9" fill="#d8e2eb" opacity=".22"/></pattern>
+      <pattern id="pknurl" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 0v5" stroke="#9cabb6" stroke-opacity=".3" stroke-width="2"/></pattern>
+    </defs><ellipse cx="300" cy="424" rx="187" ry="14" fill="#152a3d" opacity=".17" filter="url(#pshadow)"/><path d="M172 271c0-33 29-55 128-55s128 22 128 55v80c0 46-38 71-128 71s-128-25-128-71Z" fill="url(#pbody)" stroke="#939ea9" stroke-opacity=".4" stroke-width="2"/>
+          <ellipse cx="300" cy="271" rx="128" ry="54" fill="url(#pmetal)"/>
+          <ellipse cx="300" cy="272" rx="110" ry="38" fill="#10161d"/>
+          <ellipse cx="252" cy="275" rx="31" ry="21" fill="#0a111b"/><ellipse cx="348" cy="275" rx="31" ry="21" fill="#0a111b"/>
+          <path d="M179 322c79 22 161 23 242 0" stroke="#939ea9" stroke-opacity=".35"/>
+          <circle cx="300" cy="365" r="3" fill="#91ead8"/>
+          <g transform="rotate(-25 219 148)"><rect x="208" y="130" width="26" height="109" rx="13" fill="url(#pbody)" stroke="#939ea9" stroke-opacity=".4"/><ellipse cx="221" cy="125" rx="38" ry="43" fill="url(#pmetal)"/><ellipse cx="193" cy="121" rx="15" ry="24" fill="#15212c"/><ellipse cx="193" cy="121" rx="9" ry="17" fill="url(#pmesh)"/><path d="M219 157v57" stroke="#939ea9" stroke-opacity=".5" stroke-width="2"/></g>
+          <g transform="rotate(27 383 137)"><rect x="365" y="122" width="26" height="107" rx="13" fill="url(#pbody)" stroke="#939ea9" stroke-opacity=".4"/><ellipse cx="379" cy="116" rx="38" ry="43" fill="url(#pmetal)"/><ellipse cx="406" cy="113" rx="15" ry="24" fill="#15212c"/><ellipse cx="406" cy="113" rx="9" ry="17" fill="url(#pmesh)"/><path d="M379 148v57" stroke="#939ea9" stroke-opacity=".5" stroke-width="2"/></g></svg>

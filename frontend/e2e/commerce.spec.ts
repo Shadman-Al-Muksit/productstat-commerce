@@ -1,6 +1,8 @@
 import {test, expect, type APIRequestContext} from '@playwright/test';
 
 const password = process.env.DEMO_PASSWORD || 'ProductStatDemo!2026';
+const electronicsName = 'Studio Wireless Headphones';
+const electronicsQuery = encodeURIComponent(electronicsName);
 async function mutation(context: APIRequestContext, path: string, data: unknown) {
   const bootstrap = await (await context.get('/api/v1/bootstrap/')).json();
   const response = await context.post('/api/v1/' + path, {data, headers: {'X-CSRFToken': bootstrap.csrfToken}});
@@ -12,14 +14,47 @@ async function login(context: APIRequestContext, username = 'administrator') {
 }
 
 test('catalogue, Bangla navigation, keyboard search and mobile layout', async ({page}) => {
-  await page.goto('/');
+  await page.goto('/?ref=walkthrough');
   await expect(page.locator('a[href^="/products/"]').first()).toBeVisible();
   await page.getByRole('button', {name: 'Switch language'}).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'bn');
   await page.getByRole('button', {name: 'Switch language'}).click();
   const search = page.getByRole('textbox', {name: 'Search products'});
-  await search.fill('Everyday Tote');
-  await expect(page.locator('a[href^="/products/"]').first()).toContainText('Everyday Tote');
+  await search.fill(electronicsName);
+  await expect(page.locator('a[href^="/products/"]').first()).toContainText(electronicsName);
+  const headerSearch = page.getByRole('textbox', {name: 'Search entire store'});
+  await headerSearch.fill('VertexBook');
+  await headerSearch.press('Enter');
+  await expect(search).toHaveValue('VertexBook');
+  await expect(page.getByTestId('product-card').first()).toContainText('VertexBook');
+  expect(new URL(page.url()).searchParams.get('q')).toBe('VertexBook');
+  await search.clear();
+  await expect(headerSearch).toHaveValue('');
+  expect(new URL(page.url()).searchParams.has('q')).toBeFalsy();
+  expect(new URL(page.url()).searchParams.get('ref')).toBe('walkthrough');
+  await expect.poll(() => page.getByTestId('product-card').count()).toBeGreaterThan(1);
+  await page.reload();
+  await expect(search).toHaveValue('');
+  await expect(headerSearch).toHaveValue('');
+  await expect.poll(() => page.getByTestId('product-card').count()).toBeGreaterThan(1);
+  await search.fill('VertexBook');
+  await page.getByRole('region', {name: 'Shop by category'}).getByRole('button', {name: 'Audio', exact: true}).click();
+  await expect(search).toHaveValue('');
+  await expect(headerSearch).toHaveValue('');
+  expect(new URL(page.url()).searchParams.has('q')).toBeFalsy();
+  expect(new URL(page.url()).searchParams.get('category')).toBe('Audio');
+  await expect(page.getByTestId('product-card').first().locator('.product-category')).toHaveText('Audio');
+  await headerSearch.fill('VertexBook');
+  await headerSearch.press('Enter');
+  await expect(search).toHaveValue('VertexBook');
+  await expect(page.getByTestId('product-card').first()).toContainText('VertexBook');
+  await page.goBack();
+  await expect(search).toHaveValue('');
+  await expect(headerSearch).toHaveValue('');
+  expect(new URL(page.url()).searchParams.get('category')).toBe('Audio');
+  await expect(page.getByTestId('product-card').first().locator('.product-category')).toHaveText('Audio');
+  await page.getByRole('link', {name: 'View all electronics', exact: true}).click();
+  await expect.poll(() => page.getByTestId('product-card').count()).toBeGreaterThan(3);
   await page.screenshot({path: '../docs/screenshots/storefront-desktop.png', fullPage: true});
   await page.setViewportSize({width: 390, height: 844});
   await expect(page.locator('a[href^="/products/"]').first()).toBeVisible();
@@ -27,20 +62,79 @@ test('catalogue, Bangla navigation, keyboard search and mobile layout', async ({
   await page.screenshot({path: '../docs/screenshots/storefront-mobile.png', fullPage: true});
 });
 
+test('electronics colours, readable text and circular cart badge work on desktop and mobile', async ({page}) => {
+  await page.goto('/');
+  await expect(page.getByTestId('product-card').first()).toBeVisible();
+  await expect(page.getByRole('link', {name: 'Shopping cart, 0 items', exact: true})).toBeVisible();
+  await expect(page.getByTestId('cart-count')).toHaveCount(0);
+  expect(await page.locator('body').evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(17.5);
+  expect(await page.getByRole('link', {name: 'Shop electronics', exact: true}).evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(14);
+
+  const catalogue = await (await page.request.get(`/api/v1/catalog/products/?q=${electronicsQuery}&page_size=24`)).json();
+  const product = catalogue.results.find((item: any) => item.skus.length >= 3 && item.skus.some((sku: any) => sku.available >= 2));
+  expect(product, 'An electronics product has selectable colour variants and two available units.').toBeTruthy();
+  const initialSku = product.skus.find((sku: any) => sku.available >= 2);
+  await page.goto('/products/' + product.slug);
+  const image = page.getByTestId('variant-product-image');
+  const seenImages = new Set<string>();
+  for (const sku of product.skus) {
+    await page.getByRole('button', {name: sku.label, exact: true}).click();
+    await expect(page.getByRole('button', {name: sku.label, exact: true})).toHaveAttribute('aria-pressed', 'true');
+    await expect(image).toHaveAttribute('src', sku.attributes.image_url);
+    await expect(image).toHaveAttribute('alt', `${product.name} — ${sku.label}`);
+    await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBeTruthy();
+    seenImages.add(sku.attributes.image_url);
+  }
+  expect(seenImages.size).toBe(product.skus.length);
+  await page.getByRole('button', {name: initialSku.label, exact: true}).click();
+  await expect(image).toHaveAttribute('src', initialSku.attributes.image_url);
+  expect(await page.getByRole('button', {name: 'Add to cart', exact: true}).evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(14);
+  await page.getByRole('button', {name: 'Increase quantity', exact: true}).click();
+  await page.getByRole('button', {name: 'Add to cart', exact: true}).click();
+  const badge = page.getByTestId('cart-count');
+  await expect(badge).toHaveText('2');
+  await expect(page.getByRole('link', {name: 'Shopping cart, 2 items', exact: true})).toBeVisible();
+  const badgeBox = await badge.boundingBox();
+  const iconBox = await page.locator('.cart-icon-wrap > svg').boundingBox();
+  expect(badgeBox).not.toBeNull();
+  expect(iconBox).not.toBeNull();
+  expect(Math.abs(badgeBox!.width - badgeBox!.height)).toBeLessThanOrEqual(1);
+  expect(badgeBox!.x + badgeBox!.width / 2).toBeGreaterThan(iconBox!.x + iconBox!.width / 2);
+  expect(badgeBox!.y + badgeBox!.height / 2).toBeLessThan(iconBox!.y + iconBox!.height / 2);
+  expect(await badge.evaluate(element => parseFloat(getComputedStyle(element).borderRadius))).toBeGreaterThanOrEqual(badgeBox!.height / 2);
+  await page.screenshot({path: '../docs/screenshots/electronics-variant-desktop.png', fullPage: true});
+  await page.reload();
+  await expect(page.getByTestId('cart-count')).toHaveText('2');
+  await page.getByRole('link', {name: 'Shopping cart, 2 items', exact: true}).click();
+  await expect(page.getByRole('heading', {name: 'Your shopping cart', exact: true})).toBeVisible();
+  await expect(page.locator('.cart-item img').first()).toHaveAttribute('src', initialSku.attributes.image_url);
+  await expect(page.locator('.cart-item img').first()).toHaveAttribute('alt', `${product.name} — ${initialSku.label}`);
+  await page.setViewportSize({width: 390, height: 844});
+  for (const path of ['/', '/products/' + product.slug, '/cart']) {
+    await page.goto(path);
+    await expect(page.getByRole('link', {name: 'Shopping cart, 2 items', exact: true})).toBeVisible();
+    if (path === '/') await expect(page.getByTestId('product-card').first()).toBeVisible();
+    else if (path === '/cart') await expect(page.locator('.cart-item').first()).toBeVisible();
+    else await expect(page.getByTestId('variant-product-image')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${path} fits a 390px mobile viewport`).toBeTruthy();
+  }
+  await page.screenshot({path: '../docs/screenshots/electronics-cart-mobile.png', fullPage: true});
+});
+
 test('guest purchase to COD settlement, partial return, refund and reconciled analytics', async ({page, playwright, baseURL}) => {
   const staff = await playwright.request.newContext({baseURL});
   await login(staff);
-  const catalogue = await (await staff.get('/api/v1/catalog/products/?q=Everyday%20Tote&page_size=24')).json();
+  const catalogue = await (await staff.get(`/api/v1/catalog/products/?q=${electronicsQuery}&page_size=24`)).json();
   const product = catalogue.results.find((item: any) => item.skus.some((sku: any) => sku.available >= 2));
   expect(product).toBeTruthy();
   const date = new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Dhaka', year:'numeric', month:'2-digit', day:'2-digit'}).format(new Date());
   const filter = `analytics/?start=${date}&end=${date}&product_ids=${product.id}`;
   const before = await (await staff.get('/api/v1/' + filter)).json();
   await page.goto('/products/' + product.slug);
-  await expect(page.getByRole('button', {name: 'Add to bag', exact: true})).toBeEnabled();
+  await expect(page.getByRole('button', {name: 'Add to cart', exact: true})).toBeEnabled();
   await page.getByRole('button', {name: 'Increase quantity'}).click();
-  await page.getByRole('button', {name: 'Add to bag', exact: true}).click();
-  await page.getByRole('link', {name: 'View your bag'}).click();
+  await page.getByRole('button', {name: 'Add to cart', exact: true}).click();
+  await page.getByRole('link', {name: 'View your cart'}).click();
   await page.getByRole('link', {name: /checkout/i}).click();
   await page.getByLabel('Full name', {exact: true}).fill('Synthetic E2E Customer');
   await page.getByLabel('Phone number').fill('01700000000');
@@ -114,7 +208,7 @@ test('analyst workspace exposes reports and protects operational customer record
 test('staff order drawer prepares and cancels an order through real validated actions', async ({page, playwright, baseURL}) => {
   const guest = await playwright.request.newContext({baseURL});
   const bootstrap = await (await guest.get('/api/v1/bootstrap/')).json();
-  const catalogue = await (await guest.get('/api/v1/catalog/products/?q=Everyday%20Tote')).json();
+  const catalogue = await (await guest.get(`/api/v1/catalog/products/?q=${electronicsQuery}`)).json();
   const product = catalogue.results.find((p: any) => p.skus.some((s: any) => s.available > 1));
   const sku = product.skus.find((s: any) => s.available > 1);
   await mutation(guest, 'cart/', {sku_id: sku.id, quantity: 1});
@@ -151,7 +245,7 @@ test('staff order drawer prepares and cancels an order through real validated ac
 test('administrator reviews and queues a historical correction without changing live stock', async ({page, playwright, baseURL}) => {
   const staff = await playwright.request.newContext({baseURL});
   await login(staff);
-  const catalogue = await (await staff.get('/api/v1/catalog/products/?q=Everyday%20Tote')).json();
+  const catalogue = await (await staff.get(`/api/v1/catalog/products/?q=${electronicsQuery}`)).json();
   const product = catalogue.results[0];
   const sku = product.skus[0];
   const source = 'synthetic-e2e-revision-' + Date.now();

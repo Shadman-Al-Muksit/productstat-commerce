@@ -16,7 +16,7 @@ from rest_framework.throttling import AnonRateThrottle
 from .models import AuditEvent,CompanySettings,DeliveryZone,Order,Product,SKU,Payment,Refund,ReturnRequest,ReturnLine,User,StockMovement
 from .permissions import IsAdministrator,IsOperator,IsStaffReader
 from .serializers import CheckoutSerializer,ProductSerializer,ProductWriteSerializer,RegisterSerializer,SettingsSerializer,SKUSerializer,UserSerializer
-from .schema import CancelInput,OrderAction,ReturnInput,ReturnAction,RefundInput,InventoryInput
+from .schema import CartInput,CancelInput,OrderAction,ReturnInput,ReturnAction,RefundInput,InventoryInput
 from . import payments,services
 
 class LoginThrottle(AnonRateThrottle):
@@ -142,9 +142,13 @@ def catalog_detail(request,slug):
 
 def cart_data(request):
     cart=request.session.get('cart',{})
-    skus={str(s.id):s for s in SKU.objects.filter(id__in=cart.keys()).select_related('product')}
+    skus={str(s.id):s for s in SKU.objects.filter(id__in=cart.keys(),is_active=True,product__is_active=True).select_related('product')}
+    # Publication can change after an item was added. Remove archived lines
+    # from the persisted cart as well as the response, leaving active items intact.
+    contents={key:quantity for key,quantity in cart.items() if key in skus}
+    if contents!=cart: request.session['cart']=contents
     items=[];subtotal=Decimal('0')
-    for key,quantity in cart.items():
+    for key,quantity in contents.items():
         sku=skus.get(key)
         if not sku: continue
         total=sku.price*quantity;subtotal+=total
@@ -155,12 +159,17 @@ def cart_data(request):
 def cart(request):
     if request.method=='DELETE': request.session['cart']={}
     if request.method=='POST':
-        sku=get_object_or_404(SKU,pk=request.data.get('sku_id'),is_active=True,product__is_active=True)
-        quantity=services.integer(request.data.get('quantity'),minimum=0,maximum=100)
-        if quantity>sku.available: raise ValidationError('Requested quantity exceeds available stock.')
+        serializer=CartInput(data=request.data);serializer.is_valid(raise_exception=True)
+        sku_id=str(serializer.validated_data['sku_id'])
+        quantity=serializer.validated_data['quantity']
         contents=request.session.get('cart',{}).copy()
-        if quantity: contents[str(sku.id)]=quantity
-        else: contents.pop(str(sku.id),None)
+        if quantity:
+            sku=get_object_or_404(SKU,pk=sku_id,is_active=True,product__is_active=True)
+            if quantity>sku.available: raise ValidationError('Requested quantity exceeds available stock.')
+            contents[sku_id]=quantity
+        else:
+            # Removal is idempotent, including products archived since addition.
+            contents.pop(sku_id,None)
         if len(contents)>100: raise ValidationError('Cart may contain at most 100 different SKUs.')
         request.session['cart']=contents
     return Response(cart_data(request))

@@ -127,7 +127,7 @@ def main():
             raise RuntimeError("Real-worker verification cannot run with CELERY_TASK_ALWAYS_EAGER=1.")
         client = Client()
         inventory = client.request("GET", "staff/inventory/?page_size=100")["results"]
-        selected = next(row for row in inventory if row["code"].startswith("FRM-") and row["on_hand"] >= 20 and row["reserved"] == 0)
+        selected = next(row for row in inventory if row["code"].startswith(("ELX-", "FRM-")) and row["on_hand"] >= 20 and row["reserved"] == 0)
         sku = selected["code"]
         baseline = snapshot(selected)
         evidence.update(base_url=client.base, sku=sku, baseline=baseline)

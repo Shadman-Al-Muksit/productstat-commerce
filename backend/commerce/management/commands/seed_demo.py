@@ -12,6 +12,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
+from commerce.electronics_catalogue import COLORS, FAMILIES, image_url, variant_attributes
 from commerce.models import (AuditEvent, CompanySettings, DeliveryZone, Order, OrderLine, Payment, PaymentSettlement, Product, Refund, RefundLine,
                              ReturnLine, ReturnRequest, Shipment, ShipmentLine, SKU, StockMovement)
 
@@ -52,7 +53,7 @@ class Command(BaseCommand):
             if created:
                 user.set_password(viewer_password if role == "analyst" else password)
                 user.save(update_fields=["password"])
-        CompanySettings.objects.get_or_create(pk=1, defaults={"name": "Forma Commerce", "support_email": "support@example.invalid"})
+        CompanySettings.objects.get_or_create(pk=1, defaults={"name": "ProductStat Commerce", "support_email": "support@example.invalid"})
         DeliveryZone.objects.get_or_create(name="Chattogram city", defaults={"charge": Decimal("70.00")})
         DeliveryZone.objects.get_or_create(name="Other Bangladesh districts", defaults={"charge": Decimal("120.00")})
         existing = Order.objects.filter(source="demo").count()
@@ -72,32 +73,23 @@ class Command(BaseCommand):
         end = min(datetime.combine(anchor, time(23, 59), TZ), timezone.now())
         beginning = end - timedelta(days=365)
         rng = random.Random(20261116)
-        families = [
-            ("Everyday Tote", "Bags", "tote.svg", 890, "A durable everyday carry with considered details and room for the essentials."),
-            ("Studio Headphones", "Electronics", "headphones.svg", 2490, "Comfortable listening for focused work, long commutes and everyday playlists."),
-            ("Arc Table Lamp", "Home", "lamp.svg", 1690, "Warm, focused light and a clean silhouette for your desk or bedside table."),
-            ("Daily Water Bottle", "Lifestyle", "bottle.svg", 790, "A reusable bottle made for daily routines, errands and days outdoors."),
-            ("Essential Watch", "Accessories", "watch.svg", 3490, "A simple dial and versatile finish for a reliable everyday accessory."),
-            ("Studio Chair", "Furniture", "chair.svg", 5990, "An understated chair with a supportive shape for a thoughtfully arranged space."),
-        ]
         products = []
         skus = []
         movements = []
-        product_count = (sku_count + 4) // 5
-        colors = ("Sand", "Charcoal", "Forest", "Terracotta", "Cloud")
+        product_count = (sku_count + len(COLORS) - 1) // len(COLORS)
         for index in range(product_count):
-            name, category, image, price, description = families[index % len(families)]
-            suffix = "" if index < 6 else f" {index // 6 + 1:02d}"
-            product = Product(id=uid(f"product:{index}"), name=name + suffix, slug=f"{name.lower().replace(' ', '-')}-{index+1}",
-                              category=category, description=description, image_url=f"/products/{image}")
+            family = FAMILIES[index % len(FAMILIES)]
+            suffix = "" if index < len(FAMILIES) else f" {index // len(FAMILIES) + 1:02d}"
+            product = Product(id=uid(f"product:{index}"), name=family.name + suffix, slug=f"{family.key}-{index+1}",
+                              category=family.category, description=family.description, image_url=image_url(family.key, "black"))
             products.append(product)
-            for variant in range(5):
-                ordinal = index * 5 + variant
+            for variant, color in enumerate(COLORS):
+                ordinal = index * len(COLORS) + variant
                 if ordinal >= sku_count:
                     break
-                sku = SKU(id=uid(f"sku:{ordinal}"), product=product, code=f"FRM-{ordinal+1:05d}", label=colors[variant],
-                          attributes={"color": colors[variant]}, price=Decimal(price + 50 * (index // 6)),
-                          cost=Decimal(price) * Decimal("0.55"), on_hand=0 if ordinal % 67 == 0 else rng.randint(20, 120))
+                sku = SKU(id=uid(f"sku:{ordinal}"), product=product, code=f"ELX-{ordinal+1:05d}", label=color[1],
+                          attributes=variant_attributes(family, color), price=Decimal(family.price + 50 * (index // len(FAMILIES))),
+                          cost=Decimal(family.price) * Decimal("0.55"), on_hand=0 if ordinal % 67 == 0 else rng.randint(20, 120))
                 skus.append(sku)
                 movements.append(StockMovement(sku=sku, on_hand_delta=sku.on_hand, kind="demo_opening", reference=f"demo-opening:{ordinal}"))
         Product.objects.bulk_create(products, batch_size=1000)

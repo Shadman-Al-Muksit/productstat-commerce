@@ -7,7 +7,7 @@ import {
   ArrowUpRight,
   Search,
   SlidersHorizontal,
-  ShoppingBag,
+  ShoppingCart,
   Plus,
   Minus,
   Trash2,
@@ -38,6 +38,39 @@ import {
 } from "./ui";
 type Row = Record<string, any>;
 const catName = (p: Product) => p.category;
+const electronicCategories = [
+  { name: "Laptops & PCs", bn: "ল্যাপটপ ও পিসি", image: "laptop-silver" },
+  { name: "Mobile & Tablets", bn: "মোবাইল ও ট্যাবলেট", image: "tablet-silver" },
+  { name: "Audio", bn: "অডিও", image: "headphones-black" },
+  { name: "Cameras", bn: "ক্যামেরা", image: "camera-black" },
+  { name: "Smart Home", bn: "স্মার্ট হোম", image: "smart-camera-silver" },
+  { name: "Tools & Gadgets", bn: "টুলস ও গ্যাজেট", image: "screwdriver-blue" },
+  { name: "Accessories", bn: "অ্যাকসেসরিজ", image: "charger-silver" },
+];
+function variantAttributes(
+  sku: Pick<SKU, "attributes"> | null | undefined,
+): Record<string, unknown> {
+  const attributes = sku?.attributes;
+  return attributes &&
+    typeof attributes === "object" &&
+    !Array.isArray(attributes)
+    ? (attributes as Record<string, unknown>)
+    : {};
+}
+function variantImage(
+  sku: Pick<SKU, "attributes"> | null | undefined,
+  fallback: string,
+) {
+  const image = variantAttributes(sku).image_url;
+  return typeof image === "string" && image ? image : fallback;
+}
+function variantColor(sku: SKU) {
+  const color = variantAttributes(sku).color_hex;
+  return typeof color === "string" &&
+    /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(color)
+    ? color
+    : undefined;
+}
 function pName(p: Product, bn: boolean) {
   return p.name;
 }
@@ -54,6 +87,36 @@ export function Storefront() {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [count, setCount] = useState(0);
+  function changeFilters(nextSearch: string, nextCategory: string) {
+    const params = new URLSearchParams(window.location.search);
+    if (nextSearch.trim()) params.set("q", nextSearch);
+    else params.delete("q");
+    if (nextCategory) params.set("category", nextCategory);
+    else params.delete("category");
+    params.delete("page");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+    );
+    window.dispatchEvent(new Event("productstat:catalog-search"));
+  }
+  useEffect(() => {
+    function syncFilters() {
+      const params = new URLSearchParams(window.location.search);
+      setSearch(params.get("q") || "");
+      setCategory(params.get("category") || "");
+      setPage(1);
+    }
+    syncFilters();
+    window.addEventListener("productstat:catalog-search", syncFilters);
+    window.addEventListener("popstate", syncFilters);
+    return () => {
+      window.removeEventListener("productstat:catalog-search", syncFilters);
+      window.removeEventListener("popstate", syncFilters);
+    };
+  }, []);
   useEffect(() => {
     let alive = true;
     setBusy(true);
@@ -85,119 +148,169 @@ export function Storefront() {
   useEffect(() => setPage(1), [search, category, sort]);
   return (
     <>
-      <section className="store-hero">
-        <div className="hero-copy">
-          <p className="eyebrow">
-            <span className="tiny-line" />
-            {bn ? "দৈনন্দিন জীবনের জন্য বাছাই করা" : "THE EVERYDAY, CONSIDERED"}
-          </p>
-          <h1>
-            {bn ? (
-              <>
-                প্রতিদিনের পণ্য।
-                <br />
-                <em>অসাধারণ অনুভূতি।</em>
-              </>
-            ) : (
-              <>
-                Everyday essentials.
-                <br />
-                <em>Extraordinary details.</em>
-              </>
-            )}
-          </h1>
+      <div className="electronics-hero-grid">
+        <section className="store-hero">
+          <div className="hero-copy">
+            <p className="eyebrow">
+              <span className="tiny-line" />
+              {bn ? "কাজ, খেলা ও প্রতিদিনের প্রযুক্তি" : "YOUR NEXT UPGRADE"}
+            </p>
+            <h1>
+              {bn ? (
+                <>
+                  প্রতিদিন এগিয়ে যান
+                  <br />
+                  <em>সঠিক প্রযুক্তির সাথে।</em>
+                </>
+              ) : (
+                <>
+                  Power your everyday
+                  <br />
+                  <em>with the right tech.</em>
+                </>
+              )}
+            </h1>
+            <p>
+              {bn
+                ? "ল্যাপটপ, মোবাইল, অডিও ও কাজের গ্যাজেট — সব এক জায়গায়।"
+                : "Laptops, audio, mobile essentials and useful gadgets. Find the gear that fits the way you work and live."}
+            </p>
+            <a href="#collection" className="button primary">
+              {bn ? "ইলেকট্রনিকস দেখুন" : "Shop electronics"}
+              <ArrowRight size={18} />
+            </a>
+            <div className="hero-trust">
+              <span>
+                <ShieldCheck size={16} />
+                {bn ? "নিরাপদ কেনাকাটা" : "Secure checkout"}
+              </span>
+              <span>
+                <Truck size={17} />
+                {bn ? "সারাদেশে ডেলিভারি" : "Delivery across Bangladesh"}
+              </span>
+            </div>
+          </div>
+          <div className="hero-art">
+            <img
+              src="/products/electronics/hero.svg"
+              alt={
+                bn
+                  ? "ল্যাপটপ, হেডফোন ও ইলেকট্রনিক অ্যাকসেসরিজ"
+                  : "Laptop, headphones and desktop electronics"
+              }
+            />
+          </div>
+        </section>
+        <aside className="featured-electronics">
+          <span className="featured-label">
+            {bn ? "অডিওর জগৎ" : "IN FOCUS / AUDIO"}
+          </span>
+          <h2>{bn ? "আপনার শব্দ। আপনার সময়।" : "Find your focus."}</h2>
           <p>
             {bn
-              ? "আপনার জীবনকে একটু সহজ, সুন্দর ও অর্থবহ করতে চিন্তাভাবনা করে বেছে নেওয়া পণ্য।"
-              : "Objects you’ll reach for again and again. Discover thoughtful design, honest quality, and a little more joy in the everyday."}
+              ? "হেডফোন, ইয়ারবাড ও স্পিকার দেখুন।"
+              : "Headphones, earbuds and speakers for your daily soundtrack."}
           </p>
-          <a href="#collection" className="button primary">
-            {bn ? "পণ্য দেখুন" : "Explore the collection"}
-            <ArrowRight size={18} />
-          </a>
-          <div className="hero-trust">
-            <span>
-              <ShieldCheck size={16} />
-              {bn ? "নিরাপদ কেনাকাটা" : "Considered quality"}
-            </span>
-            <span>
-              <Truck size={17} />
-              {bn ? "সারাদেশে ডেলিভারি" : "Delivery across Bangladesh"}
-            </span>
-          </div>
-        </div>
-        <div className="hero-art">
-          <div className="hero-circle" />
-          <span className="hero-index">01 / EVERYDAY OBJECTS</span>
           <img
-            src="/products/headphones.svg"
-            alt="Sculptural over-ear headphones in a warm neutral finish"
+            src="/products/electronics/headphones-black.svg"
+            alt={bn ? "কালো ওভার-ইয়ার হেডফোন" : "Black over-ear headphones"}
           />
-          <div className="hero-caption">
-            <span>
-              Good design.
-              <br />
-              <strong>Better everyday.</strong>
-            </span>
-            <a
-              href="#collection"
-              className="round-arrow"
-              aria-label={t("Explore collection")}
-            >
-              <ArrowUpRight size={24} />
-            </a>
-          </div>
-          <div className="hero-floating">
-            <span className="live-dot" />
-            CURATED WITH INTENTION
-          </div>
-        </div>
-      </section>
+          <button
+            className="button secondary"
+            onClick={() => {
+              changeFilters("", "Audio");
+              document
+                .getElementById("collection")
+                ?.scrollIntoView({ behavior: "smooth" });
+            }}
+          >
+            {bn ? "অডিও দেখুন" : "Explore audio"}
+            <ArrowRight size={17} />
+          </button>
+        </aside>
+      </div>
       <section className="benefits">
         <span>
           <Truck size={20} />
           {bn ? "দেশজুড়ে ডেলিভারি" : "Nationwide delivery"}
         </span>
         <span>
-          <ShoppingBag size={20} />
+          <ShoppingCart size={20} />
           {bn ? "ক্যাশ অন ডেলিভারি" : "Cash on delivery"}
         </span>
         <span>
           <RotateCcw size={19} />
-          {bn ? "সহজ রিটার্ন প্রক্রিয়া" : "Considered return support"}
+          {bn ? "রিটার্নে সহায়তা" : "Return support"}
         </span>
         <span>
           <ShieldCheck size={19} />
           {bn ? "স্বচ্ছ অর্ডার ট্র্যাকিং" : "Transparent order tracking"}
         </span>
       </section>
+      <section
+        className="category-section"
+        aria-label={bn ? "বিভাগ অনুযায়ী কিনুন" : "Shop by category"}
+      >
+        <div className="category-heading">
+          <h2>{bn ? "বিভাগ অনুযায়ী কিনুন" : "Shop by category"}</h2>
+          <a
+            href="#collection"
+            className="text-link"
+            onClick={() => changeFilters("", "")}
+          >
+            {bn ? "সব পণ্য দেখুন" : "View all electronics"}
+            <ArrowRight size={16} />
+          </a>
+        </div>
+        <div className="category-grid">
+          {electronicCategories.map((item) => (
+            <button
+              key={item.name}
+              className={`category-tile ${category === item.name ? "selected" : ""}`}
+              onClick={() => {
+                changeFilters("", item.name);
+                document
+                  .getElementById("collection")
+                  ?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              <img
+                src={`/products/electronics/${item.image}.svg`}
+                alt=""
+                loading="lazy"
+              />
+              <span>{bn ? item.bn : item.name}</span>
+            </button>
+          ))}
+        </div>
+      </section>
       <section className="collection" id="collection">
         <div className="collection-heading">
           <div>
             <p className="eyebrow">
-              {bn ? "আপনার প্রতিদিনের জন্য" : "FIND YOUR EVERYDAY"}
+              {bn ? "আপনার পরবর্তী আপগ্রেড" : "EXPLORE THE LINE-UP"}
             </p>
-            <h2>{bn ? "চিন্তাভাবনা করে বাছাই।" : "Thoughtfully selected."}</h2>
+            <h2>{bn ? "ইলেকট্রনিকস ও গ্যাজেট" : "Electronics, ready to go."}</h2>
           </div>
           <p>
             {bn
-              ? "উপকারী। সুন্দর। দীর্ঘস্থায়ী।"
-              : "Useful. Beautiful. Made for the way you live."}
+              ? "পণ্য তুলনা করুন। রঙ বেছে নিন। নিজের মতো কিনুন।"
+              : "Compare the details. Pick your finish. Make it yours."}
           </p>
         </div>
         <div className="catalog-controls">
           <div className="category-tabs">
             <button
               className={!category ? "selected" : ""}
-              onClick={() => setCategory("")}
+              onClick={() => changeFilters("", "")}
             >
-              {bn ? "সব পণ্য" : "All goods"}
+              {bn ? "সব ইলেকট্রনিকস" : "All electronics"}
             </button>
             {categories.slice(0, 7).map((c) => (
               <button
                 key={c}
                 className={category === c ? "selected" : ""}
-                onClick={() => setCategory(c)}
+                onClick={() => changeFilters("", c)}
               >
                 {c}
               </button>
@@ -208,9 +321,9 @@ export function Storefront() {
               <Search size={17} />
               <input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => changeFilters(e.target.value, category)}
                 aria-label={t("Search products")}
-                placeholder={bn ? "পণ্য খুঁজুন" : "Find something good…"}
+                placeholder={bn ? "পণ্য খুঁজুন" : "Search electronics…"}
               />
             </label>
             <label className="sort-label">
@@ -230,12 +343,16 @@ export function Storefront() {
         </div>
         <div className="result-caption">
           {busy
-            ? "Finding thoughtful goods…"
-            : `${count} considered ${count === 1 ? "find" : "finds"}`}
+            ? bn
+              ? "পণ্য খোঁজা হচ্ছে…"
+              : "Finding electronics…"
+            : bn
+              ? `${count}টি পণ্য`
+              : `${count} ${count === 1 ? "product" : "products"}`}
         </div>
         <Notice message={error} />
         {busy ? (
-          <Loading label={bn ? "পণ্য লোড হচ্ছে…" : "Gathering the collection…"} />
+          <Loading label={bn ? "পণ্য লোড হচ্ছে…" : "Loading electronics…"} />
         ) : products.length ? (
           <div className="product-grid">
             {products.map((p, i) => (
@@ -245,7 +362,7 @@ export function Storefront() {
         ) : (
           !error && (
             <Empty
-              title={bn ? "কোনো পণ্য পাওয়া যায়নি" : "No goods found"}
+              title={bn ? "কোনো পণ্য পাওয়া যায়নি" : "No products found"}
               text={t("Try a different search or collection.")}
             />
           )
@@ -262,25 +379,29 @@ export function Storefront() {
           }}
         />
         <div className="collection-end">
-          <span>GOOD THINGS, CHOSEN WELL.</span>
           <span>
-            Designed for everyday living
+            {bn
+              ? "আপনার কাজের জন্য সঠিক প্রযুক্তি।"
+              : "THE RIGHT TECH FOR WHAT YOU DO."}
+          </span>
+          <span>
+            {bn ? "কাজ। খেলা। সংযোগ।" : "Work. Play. Stay connected."}
             <ArrowUpRight size={16} />
           </span>
         </div>
       </section>
       <section className="story-banner">
         <div>
-          <p className="eyebrow">MORE THAN A STOREFRONT</p>
+          <p className="eyebrow">PRODUCTSTAT FOR BUSINESS</p>
           <h2>
-            Good products.
+            Every product.
             <br />
-            <em>Better understanding.</em>
+            <em>A clearer picture.</em>
           </h2>
           <p>
-            Behind every order is a story. Our company workspace connects
-            products, deliveries and returns into a clear picture of
-            performance.
+            Follow each product from purchase to delivery and return. The
+            company workspace brings catalogue, stock and performance into one
+            place.
           </p>
           <Link className="text-link" href="/analytics">
             Explore product intelligence
@@ -315,6 +436,7 @@ function ProductCard({
   const { language } = useApp();
   const t = useStoreText();
   const available = p.total_available;
+  const specification = variantAttributes(p.skus?.[0]).specification;
   return (
     <Link
       href={`/products/${p.slug}`}
@@ -323,7 +445,7 @@ function ProductCard({
     >
       <div className={`product-image tone-${index % 6}`}>
         <img
-          src={p.image_url || "/products/tote.svg"}
+          src={p.image_url || "/products/electronics/headphones-black.svg"}
           alt={pName(p, language === "bn")}
         />
         <span className="product-category">{catName(p)}</span>
@@ -338,11 +460,18 @@ function ProductCard({
         <div>
           <h3>{pName(p, language === "bn")}</h3>
           <p>
-            {p.skus?.length || 1} considered{" "}
-            {p.skus?.length === 1 ? "option" : "options"}
+            {typeof specification === "string" && specification
+              ? specification
+              : `${p.skus?.length || 1} ${language === "bn" ? "টি রঙের বিকল্প" : p.skus?.length === 1 ? "finish available" : "finishes available"}`}
           </p>
         </div>
-        <strong>{money(p.min_price || p.skus?.[0]?.price)}</strong>
+        <div className="product-card-bottom">
+          <strong>{money(p.min_price || p.skus?.[0]?.price)}</strong>
+          <span>
+            {language === "bn" ? "বিস্তারিত" : "View options"}
+            <ArrowRight size={15} />
+          </span>
+        </div>
       </div>
     </Link>
   );
@@ -374,7 +503,7 @@ export function ProductDetail({ slug }: { slug: string }) {
   return (
     <div className="page-shell">
       <div className="crumbs">
-        <Link href="/">Collection</Link>
+        <Link href="/">{language === "bn" ? "ইলেকট্রনিকস" : "Electronics"}</Link>
         <ChevronRight size={14} />
         <span>{catName(p)}</span>
         <ChevronRight size={14} />
@@ -382,8 +511,18 @@ export function ProductDetail({ slug }: { slug: string }) {
       </div>
       <div className="product-detail">
         <div className="detail-art">
-          <img src={p.image_url || "/products/tote.svg"} alt={p.name} />
-          <span className="art-note">DESIGNED FOR YOUR EVERYDAY</span>
+          <img
+            src={variantImage(
+              sku,
+              p.image_url || "/products/electronics/headphones-black.svg",
+            )}
+            alt={`${p.name}${sku?.label ? ` — ${sku.label}` : ""}`}
+            data-testid="variant-product-image"
+          />
+          <span className="art-note">
+            {language === "bn" ? "নির্বাচিত রঙ" : "SELECTED FINISH"} ·{" "}
+            {sku?.label || p.name}
+          </span>
         </div>
         <div className="detail-copy">
           <p className="eyebrow">{catName(p)}</p>
@@ -398,12 +537,23 @@ export function ProductDetail({ slug }: { slug: string }) {
                   key={s.id}
                   onClick={() => {
                     setSku(s);
+                    setQuantity((current) =>
+                      Math.min(current, Math.max(1, s.available)),
+                    );
                     setSuccess("");
                   }}
+                  aria-pressed={sku?.id === s.id}
                   className={sku?.id === s.id ? "selected" : ""}
                 >
+                  {variantColor(s) && (
+                    <span
+                      className="variant-swatch"
+                      style={{ backgroundColor: variantColor(s) }}
+                      aria-hidden="true"
+                    />
+                  )}
                   {s.label ||
-                    Object.values(s.attributes || {}).join(" / ") ||
+                    String(variantAttributes(s).color || "") ||
                     s.code}
                   {sku?.id === s.id && <Check size={14} />}
                 </button>
@@ -413,8 +563,10 @@ export function ProductDetail({ slug }: { slug: string }) {
           <p className={`availability ${!sku?.available ? "unavailable" : ""}`}>
             <span className="live-dot" />
             {sku?.available
-              ? `${sku.available} available · Ready for a new everyday`
-              : "Currently out of stock"}
+              ? language === "bn"
+                ? `${sku.available}টি স্টকে আছে`
+                : `${sku.available} in stock · Available to order`
+              : t("Currently out of stock")}
           </p>
           <div className="purchase-row">
             <Quantity
@@ -437,7 +589,7 @@ export function ProductDetail({ slug }: { slug: string }) {
                     body: JSON.stringify({ sku_id: sku.id, quantity }),
                   });
                   await refreshCart();
-                  setSuccess("Added to your bag. Ready when you are.");
+                  setSuccess(t("Added to your cart."));
                 } catch (e) {
                   setError((e as Error).message);
                 } finally {
@@ -448,16 +600,16 @@ export function ProductDetail({ slug }: { slug: string }) {
               {busy
                 ? "Adding…"
                 : language === "bn"
-                  ? "ব্যাগে যোগ করুন"
-                  : "Add to bag"}
-              <ShoppingBag size={18} />
+                  ? "কার্টে যোগ করুন"
+                  : "Add to cart"}
+              <ShoppingCart size={18} />
             </button>
           </div>
           <Notice message={error} />
           <Notice message={success} success />
           {success && (
             <Link href="/cart" className="text-link">
-              {t("View your bag")}
+              {t("View your cart")}
               <ArrowRight size={17} />
             </Link>
           )}
@@ -534,17 +686,15 @@ export function CartPage() {
   return (
     <div className="page-shell">
       <SectionTitle
-        eyebrow="GOOD CHOICES START HERE"
-        title={t("Your shopping bag")}
-        text={`${cart.items.reduce((s, i) => s + i.quantity, 0)} items, thoughtfully chosen.`}
+        eyebrow="REVIEW YOUR ORDER"
+        title={t("Your shopping cart")}
+        text={`${cart.items.reduce((s, i) => s + i.quantity, 0)} ${t("items in your cart.")}`}
       />
       <Notice message={error} />
       {!cart.items.length ? (
         <Empty
-          title={t("Your next everyday favourite is waiting.")}
-          text={t(
-            "Explore our considered collection and find something that feels right.",
-          )}
+          title={t("Your cart is empty")}
+          text={t("Browse electronics and choose your next upgrade.")}
           href="/"
         />
       ) : (
@@ -555,8 +705,12 @@ export function CartPage() {
               return (
                 <div className="cart-item" key={item.sku_id || i}>
                   <img
-                    src={item.product.image_url || "/products/tote.svg"}
-                    alt=""
+                    src={variantImage(
+                      sku,
+                      item.product.image_url ||
+                        "/products/electronics/headphones-black.svg",
+                    )}
+                    alt={`${item.product.name}${sku?.label ? ` — ${sku.label}` : ""}`}
                   />
                   <div className="cart-item-copy">
                     <h3>{item.product.name}</h3>
@@ -588,7 +742,7 @@ export function CartPage() {
             </Link>
           </div>
           <aside className="order-summary">
-            <h2>{t("A little summary")}</h2>
+            <h2>{t("Order summary")}</h2>
             <div>
               <span>{t("Merchandise subtotal")}</span>
               <strong>{money(cart.subtotal)}</strong>
@@ -687,11 +841,11 @@ export function CheckoutPage() {
       <SectionTitle
         eyebrow="ONE LAST DETAIL"
         title={t("Make it yours")}
-        text={t("Tell us where your new everyday favourites should go.")}
+        text={t("Tell us where to deliver your order.")}
       />
       <Notice message={error} />
       {!cart.items.length ? (
-        <Empty title={t("Your bag is empty")} href="/" />
+        <Empty title={t("Your cart is empty")} href="/" />
       ) : (
         <form onSubmit={submit} className="checkout-grid">
           <div className="panel checkout-form">
@@ -776,7 +930,7 @@ export function CheckoutPage() {
                 <strong>{t("Cash on delivery")}</strong>
                 <small>{t("Pay when your order arrives.")}</small>
               </span>
-              <ShoppingBag size={20} />
+              <ShoppingCart size={20} />
             </label>
             <label
               className={`payment-option ${method === "sslcommerz" ? "selected" : ""}`}
@@ -996,16 +1150,20 @@ export function AccountPage({ staffOnly = false }: { staffOnly?: boolean }) {
   return (
     <div className="auth-shell">
       <div className="auth-art">
-        <p className="eyebrow">THE EVERYDAY, CONNECTED</p>
+        <p className="eyebrow">YOUR TECH, CONNECTED</p>
         <h1>
           Good to
           <br />
           <em>have you here.</em>
         </h1>
-        <img src="/products/tote.svg" alt="Everyday tote bag" />
+        <img
+          src="/products/electronics/headphones-black.svg"
+          alt="Black over-ear headphones"
+        />
         <p>
           Your purchases. Your preferences.
-          <br />A more thoughtful everyday.
+          <br />
+          Your next upgrade.
         </p>
       </div>
       <div className="auth-form">
@@ -1020,7 +1178,7 @@ export function AccountPage({ staffOnly = false }: { staffOnly?: boolean }) {
         <p className="muted">
           {staffOnly
             ? "Sign in with your company account to continue."
-            : "A little less effort. A little more everyday."}
+            : t("Your orders and account, all in one place.")}
         </p>
         <Notice message={error} />
         <form onSubmit={submit}>
@@ -1181,7 +1339,7 @@ export function OrderPage({ id }: { id: string }) {
       <Notice message={success} success />
       <div className="checkout-grid">
         <div className="panel">
-          <h2>{t("Your thoughtful finds")}</h2>
+          <h2>{t("Your ordered products")}</h2>
           <div className="table-wrap">
             <table>
               <thead>

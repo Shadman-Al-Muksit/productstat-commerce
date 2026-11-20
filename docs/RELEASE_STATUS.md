@@ -1,5 +1,11 @@
 # ProductStat Commerce release status
 
+20 November 2026 update: the storefront now focuses on electronics with larger typography, teal/navy styling, category browsing, SKU colour imagery and a circular shopping-cart badge. **145 backend tests and six browser journeys passed**; TypeScript, formatting, OpenAPI and the final optimized frontend build passed. The local app uses the optimized preview. [Storefront details](STOREFRONT.md) and [current validation](VALIDATION.md) describe the preservation checks and test environment.
+
+The old mixed catalogue was archived; its transactions, stock and reservation balances remain intact. This does not change the external deployment/payment/backup prerequisites below.
+
+## Initial release record
+
 17 November 2026. The earlier paused checkpoints are historical; the user explicitly resumed implementation and authorized final verification and publication.
 
 ## Implemented first release

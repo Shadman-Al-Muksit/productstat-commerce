@@ -1,5 +1,24 @@
 # Validation record
 
+## Electronics storefront update — 20 November 2026
+
+| Check | Result |
+|---|---|
+| Complete PostgreSQL/backend suite | **145 passed in 66.83 seconds** |
+| Final TypeScript, formatting and optimized frontend build | Passed |
+| OpenAPI validation/type generation | Passed; published schema/types unchanged |
+| Final desktop/mobile browser suite against optimized preview | **Six passed in 42.5 seconds** |
+| Preserved mixed-catalogue transition | 14 published electronics products / 42 colour SKUs; all existing transaction records and original SKU stock/reservations/prices unchanged |
+| Repeat curation | No duplicate products, SKUs or opening movements |
+
+The browser suite runs with Chromium on Windows against the WSL application: four Gunicorn workers, four threads per worker, standalone Next.js, PostgreSQL, Redis and Celery. It verifies all previous purchase/fulfilment/return/refund/report journeys plus header/category search state and browser history, all three colour images and alt text, cart thumbnails, zero/nonzero cart badge state, unit totals, circular badge geometry/top-right placement, persistence, increased text size, and home/detail/cart layouts at 390px. Desktop visual review used 1440px. The measured root is 17.5px, compared with the original 14px baseline.
+
+An earlier development-server run passed five journeys but exceeded the analyst screen's 15-second wait. The default report measured 1.516 seconds before ANALYZE and 1.540 seconds afterward when calculated directly, with identical results and 16 queries. That diagnosis did not reproduce the earlier 13–18 second HTTP delay and did not justify a reporting-code change. The final optimized-preview run passed the same wait without increasing the timeout. Development compilation/resource contention is a possible explanation, not an established cause. This update does not establish a new load-test performance claim.
+
+[Sanitized verification summary](evidence/electronics-validation.json), [catalogue-preservation evidence](evidence/electronics-curation.json), [storefront details](STOREFRONT.md), and [screenshots](screenshots) record this update. Original historical business snapshots remain intact; only publication changed. Automated integration journeys subsequently create their own clearly synthetic transactions.
+
+## Initial release verification — 17 November 2026
+
 Local release verification completed on **17 November 2026**. The application uses synthetic data; no public company deployment or actual merchant payment is claimed.
 
 ## Functional and security checks

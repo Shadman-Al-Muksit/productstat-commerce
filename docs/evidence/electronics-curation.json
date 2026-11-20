@@ -1,0 +1,24 @@
+{
+  "verified_at": "2026-11-20T11:02:57.781951+00:00",
+  "synthetic": true,
+  "active_products": 14,
+  "active_categories": [
+    "Accessories",
+    "Audio",
+    "Cameras",
+    "Laptops & PCs",
+    "Mobile & Tablets",
+    "Smart Home",
+    "Tools & Gadgets"
+  ],
+  "retained_transaction_counts": {
+    "Order": 25016,
+    "OrderLine": 75016,
+    "Payment": 21427,
+    "PaymentSettlement": 18848,
+    "Refund": 4107
+  },
+  "transaction_records_unchanged": true,
+  "prior_sku_stock_price_reservations_unchanged": true,
+  "second_apply_is_noop": true
+}

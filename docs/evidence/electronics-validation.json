@@ -1,0 +1,40 @@
+{
+  "verified_at": "2026-11-20T11:14:54.2271016Z",
+  "synthetic": true,
+  "backend": {
+    "environment": "Ubuntu WSL1, Python 3.12, PostgreSQL 17",
+    "passed": 145,
+    "duration_seconds": 66.83,
+    "failed": 0
+  },
+  "browser": {
+    "passed": 6,
+    "desktop_width": 1440,
+    "environment": "Windows Chromium against WSL Gunicorn and standalone Next.js",
+    "failed": 0,
+    "mobile_width": 390,
+    "flaky": 0,
+    "configured_expect_timeout_ms": 15000,
+    "duration_seconds": 42.501,
+    "skipped": 0
+  },
+  "frontend": {
+    "formatting": "passed",
+    "openapi": "validated; no contract changes",
+    "optimized_build": "passed",
+    "typescript": "passed"
+  },
+  "typography": {
+    "browser_zoom_percent": 100,
+    "current_root_px": 17.5,
+    "original_root_px": 14
+  },
+  "reporting_diagnostic": {
+    "before_analyze_seconds": 1.516,
+    "load_test_rerun": false,
+    "results_unchanged": true,
+    "after_analyze_seconds": 1.54,
+    "queries": 16,
+    "cause_of_prior_development_delay": "not established"
+  }
+}

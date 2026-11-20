@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500" fill="none" role="img" aria-label="Black speaker"><defs>
+      <linearGradient id="pbody" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#535e69"/><stop offset=".38" stop-color="#252b32"/><stop offset="1" stop-color="#10161d"/></linearGradient>
+      <linearGradient id="pmetal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#939ea9"/><stop offset=".28" stop-color="#252b32"/><stop offset=".68" stop-color="#535e69"/><stop offset="1" stop-color="#10161d"/></linearGradient>
+      <linearGradient id="pscreen" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#071a2b"/><stop offset=".48" stop-color="#075e68"/><stop offset="1" stop-color="#63c6c0"/></linearGradient>
+      <linearGradient id="pglass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#223d4b"/><stop offset=".52" stop-color="#06111e"/><stop offset="1" stop-color="#142c3d"/></linearGradient>
+      <radialGradient id="plens"><stop stop-color="#429b9b"/><stop offset=".19" stop-color="#0a3b53"/><stop offset=".35" stop-color="#172b44"/><stop offset=".55" stop-color="#020b15"/><stop offset=".76" stop-color="#274d63"/><stop offset="1" stop-color="#080e16"/></radialGradient>
+      <filter id="pshadow" x="-50%" y="-150%" width="200%" height="400%"><feGaussianBlur stdDeviation="10"/></filter>
+      <pattern id="pmesh" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill="#0a1119" opacity=".75"/><circle cx="5.5" cy="5.5" r=".9" fill="#d8e2eb" opacity=".22"/></pattern>
+      <pattern id="pknurl" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 0v5" stroke="#9cabb6" stroke-opacity=".3" stroke-width="2"/></pattern>
+    </defs><ellipse cx="300" cy="424" rx="187" ry="14" fill="#152a3d" opacity=".17" filter="url(#pshadow)"/><g transform="rotate(-7 300 276)">
+          <rect x="100" y="157" width="402" height="239" rx="67" fill="url(#pbody)" stroke="#939ea9" stroke-width="2"/>
+          <rect x="109" y="165" width="384" height="223" rx="60" fill="url(#pbody)"/>
+          <rect x="109" y="165" width="384" height="223" rx="60" fill="url(#pmesh)"/>
+          <path d="M165 170c95-20 201-20 272 0" stroke="#939ea9" stroke-opacity=".5" stroke-width="2"/>
+          <path d="M122 218v108m361-108v108" stroke="#10161d" stroke-width="10"/>
+          <rect x="238" y="222" width="123" height="82" rx="17" fill="#252b32" stroke="#939ea9" stroke-opacity=".5"/>
+          <path d="M272 266h56m-44-14v28m33-28v28" stroke="#939ea9" stroke-opacity=".8" stroke-width="4" stroke-linecap="round"/>
+          <path d="M201 164h18m18 0h18m18 0h18" stroke="#939ea9" stroke-width="5" stroke-linecap="round"/>
+          <path d="M167 390v14m269-14v14" stroke="#10161d" stroke-width="15" stroke-linecap="round"/>
+        </g></svg>

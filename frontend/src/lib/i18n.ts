@@ -3,8 +3,18 @@ const bangla: Record<string, string> = {
   "Choose your variant": "ধরন বেছে নিন",
   "Currently out of stock": "বর্তমানে স্টকে নেই",
   "Currently unavailable": "বর্তমানে পাওয়া যাচ্ছে না",
-  "View your bag": "আপনার ব্যাগ দেখুন",
-  "Your shopping bag": "আপনার কেনাকাটার ব্যাগ",
+  "Added to your cart.": "আপনার কার্টে যোগ হয়েছে।",
+  "View your cart": "আপনার কার্ট দেখুন",
+  "Your shopping cart": "আপনার শপিং কার্ট",
+  "items in your cart.": "টি পণ্য আপনার কার্টে আছে।",
+  "Your cart is empty": "আপনার কার্ট খালি",
+  "Browse electronics and choose your next upgrade.":
+    "ইলেকট্রনিকস দেখুন এবং আপনার পরবর্তী আপগ্রেড বেছে নিন।",
+  "Tell us where to deliver your order.":
+    "আপনার অর্ডার কোথায় পৌঁছে দেব তা জানান।",
+  "Your orders and account, all in one place.":
+    "আপনার অর্ডার ও অ্যাকাউন্ট, সব এক জায়গায়।",
+  "Your ordered products": "আপনার অর্ডার করা পণ্য",
   "Your next everyday favourite is waiting.":
     "আপনার পরবর্তী পছন্দের পণ্য অপেক্ষায় আছে।",
   "Explore our considered collection and find something that feels right.":
@@ -19,7 +29,6 @@ const bangla: Record<string, string> = {
   "Make it yours": "আপনার অর্ডার সম্পন্ন করুন",
   "Tell us where your new everyday favourites should go.":
     "আপনার পছন্দের পণ্য কোথায় পৌঁছে দেব তা জানান।",
-  "Your bag is empty": "আপনার ব্যাগ খালি",
   "Delivery details": "ডেলিভারির তথ্য",
   "Full name": "পূর্ণ নাম",
   "Phone number": "ফোন নম্বর",

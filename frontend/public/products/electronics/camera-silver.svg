@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500" fill="none" role="img" aria-label="Silver camera"><defs>
+      <linearGradient id="pbody" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#f1f4f7"/><stop offset=".38" stop-color="#c7cdd3"/><stop offset="1" stop-color="#818d99"/></linearGradient>
+      <linearGradient id="pmetal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffffff"/><stop offset=".28" stop-color="#c7cdd3"/><stop offset=".68" stop-color="#f1f4f7"/><stop offset="1" stop-color="#818d99"/></linearGradient>
+      <linearGradient id="pscreen" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#071a2b"/><stop offset=".48" stop-color="#075e68"/><stop offset="1" stop-color="#63c6c0"/></linearGradient>
+      <linearGradient id="pglass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#223d4b"/><stop offset=".52" stop-color="#06111e"/><stop offset="1" stop-color="#142c3d"/></linearGradient>
+      <radialGradient id="plens"><stop stop-color="#429b9b"/><stop offset=".19" stop-color="#0a3b53"/><stop offset=".35" stop-color="#172b44"/><stop offset=".55" stop-color="#020b15"/><stop offset=".76" stop-color="#274d63"/><stop offset="1" stop-color="#080e16"/></radialGradient>
+      <filter id="pshadow" x="-50%" y="-150%" width="200%" height="400%"><feGaussianBlur stdDeviation="10"/></filter>
+      <pattern id="pmesh" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill="#0a1119" opacity=".75"/><circle cx="5.5" cy="5.5" r=".9" fill="#d8e2eb" opacity=".22"/></pattern>
+      <pattern id="pknurl" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 0v5" stroke="#9cabb6" stroke-opacity=".3" stroke-width="2"/></pattern>
+    </defs><ellipse cx="300" cy="424" rx="187" ry="14" fill="#152a3d" opacity=".17" filter="url(#pshadow)"/><g transform="rotate(-5 300 278)">
+          <path d="M112 191h88l25-44h105l27 44h97c22 0 36 15 36 37v143c0 24-14 38-38 38H112c-25 0-40-16-40-40V232c0-26 14-41 40-41Z" fill="url(#pbody)" stroke="#ffffff" stroke-opacity=".6" stroke-width="2"/>
+          <path d="M91 238h398v133c0 24-14 38-38 38H112c-25 0-40-16-40-40V250Z" fill="url(#pmesh)" opacity=".55"/>
+          <path d="M96 194h69v211h-53c-25 0-40-16-40-40V232c0-22 9-35 24-38Z" fill="#818d99"/>
+          <rect x="102" y="172" width="56" height="23" rx="7" fill="#2b3540"/><path d="M105 178h50m-50 7h50" stroke="#586775" stroke-width="2"/>
+          <rect x="377" y="169" width="55" height="25" rx="8" fill="url(#pmetal)"/>
+          <rect x="244" y="157" width="62" height="13" rx="3" fill="#15212c"/>
+          <circle cx="308" cy="300" r="113" fill="#0c141e" stroke="#61717d" stroke-width="4"/>
+          <circle cx="308" cy="300" r="100" fill="url(#pknurl)" stroke="#202b35" stroke-width="8"/>
+          <circle cx="308" cy="300" r="85" fill="#0b1622" stroke="#667b87" stroke-width="3"/>
+          <circle cx="308" cy="300" r="71" fill="url(#plens)" stroke="#1b3545" stroke-width="5"/>
+          <circle cx="308" cy="300" r="42" fill="#060f1d" stroke="#446077" stroke-width="2"/>
+          <circle cx="286" cy="276" r="15" fill="#9ddbd5" opacity=".18"/><circle cx="331" cy="320" r="8" fill="#4b89ad" opacity=".35"/>
+          <circle cx="453" cy="217" r="6" fill="#94b3a6"/>
+        </g></svg>
