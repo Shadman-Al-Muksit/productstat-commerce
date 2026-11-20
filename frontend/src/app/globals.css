@@ -3922,6 +3922,144 @@ tr:last-child td {
   }
 }
 
+/* Catalogue image controls keep previews beside the values being edited. */
+.product-image-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  align-items: start;
+  gap: 12px 16px;
+  padding: 16px;
+  margin: 18px 0 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f5f8fa;
+}
+.image-editor-controls {
+  min-width: 0;
+}
+.image-editor-controls .field:last-child {
+  margin-bottom: 0;
+}
+.image-editor-controls input,
+.image-editor-controls select {
+  width: 100%;
+  font-size: 0.8rem;
+}
+.image-editor-preview {
+  margin: 0;
+  min-height: 132px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid #dfe7eb;
+  border-radius: 5px;
+  padding: 10px;
+  overflow: hidden;
+  color: #586c78;
+  font-size: 0.75rem;
+  text-align: center;
+  line-height: 1.5;
+}
+.image-editor-preview img {
+  width: 100%;
+  height: 120px;
+  object-fit: contain;
+}
+.image-editor-preview figcaption {
+  color: #586c78;
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+.image-preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.image-editor-caption {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.72rem;
+  color: #586b77;
+  line-height: 1.6;
+}
+fieldset.variant-editor {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #f7fafb;
+}
+.variant-editor-title {
+  padding: 0 7px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #234856;
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+.variant-colour-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 0.7fr);
+  gap: 16px;
+}
+.image-inherit-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  color: var(--teal-dark);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 7px 0;
+  margin-bottom: 12px;
+}
+.image-inherit-action:hover {
+  text-decoration: underline;
+}
+.colour-preview {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+}
+.colour-preview > span {
+  width: 20px;
+  height: 20px;
+  border: 1px solid #23384350;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.colour-preview input {
+  width: 100%;
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  .product-image-editor {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 13px;
+  }
+  .image-editor-preview {
+    min-height: 150px;
+  }
+  .image-editor-preview img {
+    height: 150px;
+  }
+  .variant-colour-fields {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  fieldset.variant-editor {
+    padding: 16px 12px;
+  }
+}
+
 /* Readable metadata and table labels at common laptop and mobile sizes. */
 .muted,
 .description {
@@ -5129,5 +5267,220 @@ td strong,
   }
   .chart-footnote {
     font-size: 0.5714rem;
+  }
+}
+
+/* Homepage hierarchy follows the electronics reference at normal browser zoom. */
+.store-header-inner {
+  height: 78px;
+}
+.store-nav {
+  min-height: 46px;
+}
+.electronics-hero-grid {
+  margin-top: 22px;
+}
+.store-hero,
+.hero-art,
+.featured-electronics {
+  min-height: 300px;
+}
+.hero-copy {
+  padding: 28px 0 26px 28px;
+}
+.hero-copy .eyebrow {
+  margin-bottom: 10px;
+}
+.hero-copy h1 {
+  font-size: clamp(1.8rem, 2.7vw, 2.3rem);
+  line-height: 1.1;
+  margin-bottom: 16px;
+}
+.hero-copy > p:not(.eyebrow) {
+  line-height: 1.6;
+  max-width: 400px;
+  margin-bottom: 22px;
+}
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 11px;
+  align-items: center;
+}
+.hero-actions .hero-secondary-action {
+  background: #ffffff80;
+  border-color: #a8c8cb;
+}
+.hero-art > img {
+  height: 275px;
+  margin-top: 12px;
+}
+.featured-electronics {
+  padding: 22px;
+}
+.featured-label {
+  margin-bottom: 8px;
+}
+.featured-electronics h2 {
+  font-size: 1.28rem;
+  max-width: 230px;
+  margin: 0 0 8px;
+  line-height: 1.2;
+}
+.featured-electronics p:not(.eyebrow) {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  max-width: 230px;
+  margin: 0 0 10px;
+}
+.featured-price {
+  position: relative;
+  z-index: 1;
+  color: #d7eff0;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  margin-bottom: 7px;
+}
+.featured-price strong {
+  font-size: 1.52rem;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.03em;
+}
+.featured-electronics p.featured-availability {
+  color: #b9e7df;
+  font-size: 0.72rem;
+  margin: 0;
+}
+.featured-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+  position: relative;
+  z-index: 1;
+}
+.featured-category-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  color: #e0f4f5;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  padding: 8px 0;
+  font-size: 0.72rem;
+}
+.featured-electronics > img {
+  width: 195px;
+  height: 195px;
+  right: -36px;
+  bottom: -16px;
+}
+.benefits {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+.category-section {
+  padding-top: 25px;
+}
+.category-tile img {
+  height: 78px;
+}
+.collection {
+  padding-top: 29px;
+}
+.catalog-controls {
+  flex-direction: row;
+  align-items: center;
+}
+.category-tabs {
+  flex-shrink: 0;
+}
+.catalog-tools {
+  width: auto;
+  flex: 1;
+  justify-content: flex-end;
+}
+.catalog-tools .search-box {
+  width: min(360px, 65%);
+}
+@media (max-width: 1100px) {
+  .hero-copy h1 {
+    font-size: 1.85rem;
+  }
+  .hero-actions {
+    gap: 9px;
+  }
+  .hero-copy .button {
+    padding: 11px 13px;
+    font-size: 0.74rem;
+  }
+}
+@media (max-width: 900px) {
+  .store-header-inner {
+    height: auto;
+  }
+  .featured-electronics {
+    min-height: 255px;
+  }
+  .featured-electronics > img {
+    right: 3%;
+    width: 240px;
+    height: 240px;
+  }
+}
+@media (max-width: 700px) {
+  .hero-copy {
+    padding: 25px 22px 4px;
+  }
+  .hero-copy h1 {
+    font-size: 1.95rem;
+  }
+  .hero-actions {
+    gap: 9px;
+  }
+  .hero-copy .button {
+    font-size: 0.76rem;
+    min-height: 43px;
+    padding: 11px 13px;
+  }
+  .hero-art {
+    min-height: 185px;
+    height: 200px;
+  }
+  .hero-art > img {
+    height: 225px;
+    margin-top: 0;
+  }
+  .featured-electronics {
+    min-height: 270px;
+    padding: 23px 20px;
+  }
+  .featured-electronics h2 {
+    max-width: 70%;
+    font-size: 1.25rem;
+  }
+  .featured-electronics p:not(.eyebrow) {
+    max-width: 68%;
+  }
+  .featured-electronics > img {
+    right: -30px;
+    width: 180px;
+    height: 180px;
+  }
+  .catalog-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .catalog-tools {
+    width: 100%;
+  }
+  .catalog-tools .search-box {
+    width: 100%;
+  }
+  .category-tile img {
+    height: 74px;
   }
 }

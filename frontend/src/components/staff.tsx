@@ -26,6 +26,13 @@ import {
 } from "@tanstack/react-table";
 import { api, list, money, num, pretty, Order } from "@/lib/api";
 import { useApp } from "./commerce-app";
+import { ProductImagePicker } from "./product-image-picker";
+import {
+  colourHexError,
+  defaultProductImage,
+  imageSourceError,
+  skuAttributes,
+} from "@/lib/product-images";
 import {
   Loading,
   Notice,
@@ -831,14 +838,14 @@ function Products() {
               slug: "",
               category: "",
               description: "",
-              image_url: "/products/tote.svg",
+              image_url: defaultProductImage,
               is_active: true,
               skus: [
                 {
                   code: "",
-                  label: "Standard",
+                  label: "Black",
                   price: "0.00",
-                  attributes: {},
+                  attributes: { color: "Black", color_hex: "#252b32" },
                   is_active: true,
                 },
               ],
@@ -894,7 +901,7 @@ function Products() {
                       cell: ({ row }) => (
                         <div className="table-product">
                           <img
-                            src={row.original.image_url || "/products/tote.svg"}
+                            src={row.original.image_url || defaultProductImage}
                             alt=""
                           />
                           <span>
@@ -1017,20 +1024,78 @@ function ProductEditor({
   close: () => void;
   saved: () => Promise<void>;
 }) {
-  const [p, setP] = useState<Row>(JSON.parse(JSON.stringify(product)));
+  const [p, setP] = useState<Row>(() => {
+    const draft = JSON.parse(JSON.stringify(product));
+    return {
+      ...draft,
+      skus: (Array.isArray(draft.skus) ? draft.skus : []).map((sku: Row) => ({
+        ...sku,
+        attributes: skuAttributes(sku.attributes),
+      })),
+    };
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  function updateVariant(index: number, values: Row) {
+    setP((current: Row) => ({
+      ...current,
+      skus: current.skus.map((sku: Row, position: number) =>
+        position === index ? { ...sku, ...values } : sku,
+      ),
+    }));
+  }
+  function updateVariantAttributes(index: number, values: Row) {
+    setP((current: Row) => ({
+      ...current,
+      skus: current.skus.map((sku: Row, position: number) => {
+        if (position !== index) return sku;
+        const attributes = skuAttributes(sku.attributes);
+        const nextColour = values.color;
+        const syncLabel =
+          typeof nextColour === "string" &&
+          nextColour &&
+          (!sku.label || sku.label === attributes.color);
+        return {
+          ...sku,
+          label: syncLabel ? nextColour : sku.label,
+          attributes: { ...attributes, ...values },
+        };
+      }),
+    }));
+  }
   return (
     <Drawer
-      title={product.id ? "Edit product" : "Add a considered find"}
+      title={product.id ? "Edit product" : "Add electronics product"}
       close={close}
       subtitle="PRODUCT CATALOGUE"
     >
       <form
         onSubmit={async (e) => {
           e.preventDefault();
-          setBusy(true);
           setError("");
+          const productImageError = imageSourceError(p.image_url || "");
+          if (productImageError) {
+            setError(`Product image: ${productImageError}`);
+            return;
+          }
+          for (const [index, variant] of p.skus.entries()) {
+            const attributes = skuAttributes(variant.attributes);
+            const imageError = imageSourceError(
+              typeof attributes.image_url === "string"
+                ? attributes.image_url
+                : "",
+            );
+            const colourError = colourHexError(
+              typeof attributes.color_hex === "string"
+                ? attributes.color_hex
+                : "",
+            );
+            if (imageError || colourError) {
+              setError(`Variant ${index + 1}: ${imageError || colourError}`);
+              return;
+            }
+          }
+          setBusy(true);
           try {
             await api(`staff/products/${product.id ? `${product.id}/` : ""}`, {
               method: product.id ? "PATCH" : "POST",
@@ -1086,27 +1151,11 @@ function ProductEditor({
             onChange={(e) => setP({ ...p, description: e.target.value })}
           />
         </Field>
-        <Field label="Product image">
-          <select
-            value={p.image_url}
-            onChange={(e) => setP({ ...p, image_url: e.target.value })}
-          >
-            {[
-              "tote",
-              "headphones",
-              "lamp",
-              "bottle",
-              "watch",
-              "chair",
-              "shirt",
-              "shoes",
-            ].map((n) => (
-              <option value={`/products/${n}.svg`} key={n}>
-                {pretty(n)}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <ProductImagePicker
+          label="Product image"
+          value={typeof p.image_url === "string" ? p.image_url : ""}
+          onChange={(image_url) => setP({ ...p, image_url })}
+        />
         <label className="checkbox-field">
           <input
             type="checkbox"
@@ -1117,7 +1166,14 @@ function ProductEditor({
         </label>
         <h3>Sellable variants</h3>
         {p.skus.map((s: Row, i: number) => (
-          <div className="variant-editor" key={s.id || i}>
+          <fieldset
+            className="variant-editor"
+            key={s.id || i}
+            aria-label={`Variant ${i + 1}: ${s.code || "New SKU"}`}
+          >
+            <legend className="variant-editor-title">
+              Variant {i + 1} · {s.code || "New SKU"}
+            </legend>
             <div className="form-grid">
               {[
                 ["code", "SKU code"],
@@ -1132,18 +1188,83 @@ function ProductEditor({
                     step={key === "price" ? "0.01" : undefined}
                     value={s[key]}
                     onChange={(e) =>
-                      setP({
-                        ...p,
-                        skus: p.skus.map((x: Row, j: number) =>
-                          j === i ? { ...x, [key]: e.target.value } : x,
-                        ),
-                      })
+                      updateVariant(i, { [key]: e.target.value })
                     }
                   />
                 </Field>
               ))}
             </div>
-          </div>
+            <div className="form-grid variant-colour-fields">
+              <Field label="Colour name" hint="Shown with the variant image.">
+                <input
+                  aria-label="Colour name"
+                  value={
+                    typeof skuAttributes(s.attributes).color === "string"
+                      ? String(skuAttributes(s.attributes).color)
+                      : ""
+                  }
+                  maxLength={120}
+                  placeholder="For example, Ocean blue"
+                  onChange={(event) =>
+                    updateVariantAttributes(i, { color: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Colour hex" hint="Optional: #416d94 or #369.">
+                <div className="colour-preview">
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      backgroundColor:
+                        typeof skuAttributes(s.attributes).color_hex ===
+                          "string" &&
+                        !colourHexError(
+                          String(skuAttributes(s.attributes).color_hex),
+                        )
+                          ? String(skuAttributes(s.attributes).color_hex) ||
+                            "transparent"
+                          : "transparent",
+                    }}
+                  />
+                  <input
+                    aria-label="Colour hex"
+                    value={
+                      typeof skuAttributes(s.attributes).color_hex === "string"
+                        ? String(skuAttributes(s.attributes).color_hex)
+                        : ""
+                    }
+                    maxLength={7}
+                    placeholder="#416d94"
+                    pattern="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?"
+                    title="Use a three- or six-digit hex colour, such as #416d94."
+                    onChange={(event) =>
+                      updateVariantAttributes(i, {
+                        color_hex: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </Field>
+            </div>
+            <ProductImagePicker
+              label="Variant image"
+              value={
+                typeof skuAttributes(s.attributes).image_url === "string"
+                  ? String(skuAttributes(s.attributes).image_url)
+                  : ""
+              }
+              fallback={p.image_url || ""}
+              allowInherit
+              onChange={(image_url, choice) =>
+                updateVariantAttributes(i, {
+                  image_url,
+                  ...(choice
+                    ? { color: choice.colour, color_hex: choice.hex }
+                    : {}),
+                })
+              }
+            />
+          </fieldset>
         ))}
         <button
           type="button"

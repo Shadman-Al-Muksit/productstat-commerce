@@ -87,6 +87,11 @@ export function Storefront() {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [count, setCount] = useState(0);
+  const [featuredAudio, setFeaturedAudio] = useState<Product | null>(null);
+  const [featuredAudioBusy, setFeaturedAudioBusy] = useState(true);
+  const featuredSpecification = variantAttributes(
+    featuredAudio?.skus?.[0],
+  ).specification;
   function changeFilters(nextSearch: string, nextCategory: string) {
     const params = new URLSearchParams(window.location.search);
     if (nextSearch.trim()) params.set("q", nextSearch);
@@ -102,6 +107,25 @@ export function Storefront() {
     );
     window.dispatchEvent(new Event("productstat:catalog-search"));
   }
+  useEffect(() => {
+    let alive = true;
+    api<Row>(
+      "catalog/products/?q=Studio%20Wireless%20Headphones&page_size=24&sort=name",
+    )
+      .then((data) => {
+        if (!alive) return;
+        setFeaturedAudio(
+          list<Product>(data).find(
+            (product) => product.name === "Studio Wireless Headphones",
+          ) || null,
+        );
+      })
+      .catch(() => alive && setFeaturedAudio(null))
+      .finally(() => alive && setFeaturedAudioBusy(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
   useEffect(() => {
     function syncFilters() {
       const params = new URLSearchParams(window.location.search);
@@ -153,41 +177,51 @@ export function Storefront() {
           <div className="hero-copy">
             <p className="eyebrow">
               <span className="tiny-line" />
-              {bn ? "কাজ, খেলা ও প্রতিদিনের প্রযুক্তি" : "YOUR NEXT UPGRADE"}
+              {bn ? "ল্যাপটপ · মোবাইল · অডিও" : "LAPTOPS / MOBILE / AUDIO"}
             </p>
             <h1>
               {bn ? (
                 <>
-                  প্রতিদিন এগিয়ে যান
+                  ল্যাপটপ, মোবাইল
                   <br />
-                  <em>সঠিক প্রযুক্তির সাথে।</em>
+                  <em>ও প্রতিদিনের প্রযুক্তি।</em>
                 </>
               ) : (
                 <>
-                  Power your everyday
+                  Laptops, phones
                   <br />
-                  <em>with the right tech.</em>
+                  <em>and everyday tech.</em>
                 </>
               )}
             </h1>
             <p>
               {bn
-                ? "ল্যাপটপ, মোবাইল, অডিও ও কাজের গ্যাজেট — সব এক জায়গায়।"
-                : "Laptops, audio, mobile essentials and useful gadgets. Find the gear that fits the way you work and live."}
+                ? "কম্পিউটার, অডিও ও কাজের অ্যাকসেসরিজ। ডেলিভারি সারা বাংলাদেশে।"
+                : "Your next upgrade, delivered across Bangladesh."}
             </p>
-            <a href="#collection" className="button primary">
-              {bn ? "ইলেকট্রনিকস দেখুন" : "Shop electronics"}
-              <ArrowRight size={18} />
-            </a>
-            <div className="hero-trust">
-              <span>
-                <ShieldCheck size={16} />
-                {bn ? "নিরাপদ কেনাকাটা" : "Secure checkout"}
-              </span>
-              <span>
-                <Truck size={17} />
-                {bn ? "সারাদেশে ডেলিভারি" : "Delivery across Bangladesh"}
-              </span>
+            <div className="hero-actions">
+              <a
+                href="#collection"
+                className="button primary"
+                onClick={() => changeFilters("", "")}
+              >
+                {bn ? "ইলেকট্রনিকস দেখুন" : "Shop electronics"}
+                <ArrowRight size={18} />
+              </a>
+              <a
+                href="/?category=Laptops%20%26%20PCs#collection"
+                className="button secondary hero-secondary-action"
+                onClick={(event) => {
+                  event.preventDefault();
+                  changeFilters("", "Laptops & PCs");
+                  document
+                    .getElementById("collection")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                {bn ? "ল্যাপটপ দেখুন" : "Explore laptops"}
+                <ArrowRight size={17} />
+              </a>
             </div>
           </div>
           <div className="hero-art">
@@ -203,30 +237,90 @@ export function Storefront() {
         </section>
         <aside className="featured-electronics">
           <span className="featured-label">
-            {bn ? "অডিওর জগৎ" : "IN FOCUS / AUDIO"}
+            {bn ? "অডিও" : "AUDIO SPOTLIGHT"}
           </span>
-          <h2>{bn ? "আপনার শব্দ। আপনার সময়।" : "Find your focus."}</h2>
+          <h2>
+            {featuredAudio?.name ||
+              (bn ? "হেডফোন, ইয়ারবাড ও স্পিকার" : "Headphones, earbuds & more")}
+          </h2>
           <p>
-            {bn
-              ? "হেডফোন, ইয়ারবাড ও স্পিকার দেখুন।"
-              : "Headphones, earbuds and speakers for your daily soundtrack."}
+            {featuredAudio
+              ? bn
+                ? "রঙ ও স্টকের তথ্য দেখুন।"
+                : typeof featuredSpecification === "string" &&
+                    featuredSpecification
+                  ? featuredSpecification
+                  : featuredAudio.description
+              : bn
+                ? "আমাদের অডিও পণ্য দেখুন।"
+                : "Browse our audio collection."}
           </p>
+          <div className="featured-price" aria-live="polite">
+            {featuredAudioBusy ? (
+              <span>{bn ? "দাম লোড হচ্ছে…" : "Loading price…"}</span>
+            ) : featuredAudio ? (
+              <>
+                <span>{bn ? "শুরু" : "From"}</span>{" "}
+                <strong>
+                  {money(
+                    featuredAudio.min_price ?? featuredAudio.skus?.[0]?.price,
+                  )}
+                </strong>
+              </>
+            ) : (
+              <span>
+                {bn
+                  ? "নির্বাচিত পণ্যটি এখন লোড করা যাচ্ছে না।"
+                  : "Featured selection is currently unavailable."}
+              </span>
+            )}
+          </div>
+          {featuredAudio && (
+            <p className="featured-availability">
+              {featuredAudio.total_available > 0
+                ? bn
+                  ? "স্টকে আছে"
+                  : "In stock"
+                : bn
+                  ? "বর্তমানে স্টক নেই"
+                  : "Currently out of stock"}
+            </p>
+          )}
           <img
-            src="/products/electronics/headphones-black.svg"
-            alt={bn ? "কালো ওভার-ইয়ার হেডফোন" : "Black over-ear headphones"}
+            src={
+              featuredAudio?.image_url ||
+              "/products/electronics/headphones-black.svg"
+            }
+            alt={
+              featuredAudio?.name ||
+              (bn ? "ওভার-ইয়ার হেডফোন" : "Over-ear headphones")
+            }
           />
-          <button
-            className="button secondary"
-            onClick={() => {
-              changeFilters("", "Audio");
-              document
-                .getElementById("collection")
-                ?.scrollIntoView({ behavior: "smooth" });
-            }}
-          >
-            {bn ? "অডিও দেখুন" : "Explore audio"}
-            <ArrowRight size={17} />
-          </button>
+          <div className="featured-actions">
+            {featuredAudio && (
+              <Link
+                className="button secondary"
+                href={`/products/${featuredAudio.slug}`}
+              >
+                {bn ? "হেডফোন দেখুন" : "View headphones"}
+                <ArrowRight size={17} />
+              </Link>
+            )}
+            <a
+              href="/?category=Audio#collection"
+              className="featured-category-link"
+              onClick={(event) => {
+                event.preventDefault();
+                changeFilters("", "Audio");
+                document
+                  .getElementById("collection")
+                  ?.scrollIntoView({ behavior: "smooth" });
+              }}
+            >
+              {bn ? "সব অডিও পণ্য" : "Explore audio"}
+              <ArrowRight size={15} />
+            </a>
+          </div>
         </aside>
       </div>
       <section className="benefits">
@@ -287,15 +381,21 @@ export function Storefront() {
       <section className="collection" id="collection">
         <div className="collection-heading">
           <div>
-            <p className="eyebrow">
-              {bn ? "আপনার পরবর্তী আপগ্রেড" : "EXPLORE THE LINE-UP"}
-            </p>
-            <h2>{bn ? "ইলেকট্রনিকস ও গ্যাজেট" : "Electronics, ready to go."}</h2>
+            <h2>
+              {category
+                ? bn
+                  ? electronicCategories.find((item) => item.name === category)
+                      ?.bn || category
+                  : category
+                : bn
+                  ? "ইলেকট্রনিকস কিনুন"
+                  : "Shop electronics"}
+            </h2>
           </div>
           <p>
             {bn
-              ? "পণ্য তুলনা করুন। রঙ বেছে নিন। নিজের মতো কিনুন।"
-              : "Compare the details. Pick your finish. Make it yours."}
+              ? "দাম, রঙ ও স্টক দেখে পণ্য বেছে নিন।"
+              : "Compare prices, colours and availability."}
           </p>
         </div>
         <div className="catalog-controls">
@@ -306,15 +406,17 @@ export function Storefront() {
             >
               {bn ? "সব ইলেকট্রনিকস" : "All electronics"}
             </button>
-            {categories.slice(0, 7).map((c) => (
-              <button
-                key={c}
-                className={category === c ? "selected" : ""}
-                onClick={() => changeFilters("", c)}
-              >
-                {c}
-              </button>
-            ))}
+            {categories
+              .filter((c) => c === category)
+              .map((c) => (
+                <button
+                  key={c}
+                  className={category === c ? "selected" : ""}
+                  onClick={() => changeFilters("", c)}
+                >
+                  {c}
+                </button>
+              ))}
           </div>
           <div className="catalog-tools">
             <label className="search-box">

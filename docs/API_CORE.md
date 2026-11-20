@@ -2,6 +2,8 @@
 
 Base `/api/v1/`. Cookie sessions, same origin. `GET bootstrap/` obtains the CSRF token; all unsafe requests, including guest cart/checkout/login, send `X-CSRFToken` and cookies. Bootstrap/login/register/logout responses include the current `csrfToken`. Roles: `administrator`, `operator`, `analyst`, `customer`. Catalog/inventory readers: first three. Customer operations and commerce writes: administrator/operator. Analysts receive redacted analytics without customer-order access. User/settings/refund confirmation: administrator.
 
+Courier settlement confirmation (`settle_cod`) requires an active administrator or superuser at the service boundary. Operators retain preparation, dispatch, delivery and COD collection access. A denied settlement returns HTTP403 without modifying payment balances, settlement events, stock or financial audit records; hiding the UI control alone is insufficient.
+
 Money is serialized as decimal strings; UUIDs are strings. Errors are HTTP 400/403/404/409/503 with `detail` or field validation errors. All order access requires its owning logged-in customer or `?token=<access_token>` (alternatively `X-Order-Token`). Staff detail uses the staff route. Historical records are read-only.
 
 `GET bootstrap/` returns `{user:null|{id,username,email,role,is_active},company:{name,support_email,currency,timezone,return_window_days,cod_enabled,logo_url},csrfToken,delivery_zones:[{id,name,charge}],payment:{cod,sslcommerz_enabled,sandbox},demo}`.
@@ -9,6 +11,8 @@ Money is serialized as decimal strings; UUIDs are strings. Errors are HTTP 400/4
 `POST auth/register/`: `{username,email,password}`. `POST auth/login/`: `{username,password}`. `POST auth/logout/`: `{}`. All return `{user,csrfToken}`.
 
 `GET catalog/products/?q=&category=&sort=newest|name|price_asc|price_desc&page=1&page_size=24` returns `{count,page,page_size,categories:[string],results:[product]}`. `GET catalog/products/<slug>/` returns one product. Product shape: `{id,name,slug,description,category,image_url,is_active,created_at,skus:[{id,code,label,attributes,price,available,is_active}],min_price,total_available}`. Product images may be `/products/bag.svg` etc.
+
+Product `image_url` and SKU `attributes.image_url` accept a public `/products/` asset, a valid credential-free HTTPS image URL or a blank value. Unsafe schemes, traversal, controls and malformed/overlong addresses are rejected. A blank variant image inherits the product image. Optional `attributes.color` is a colour name and `attributes.color_hex` is blank or a three-/six-digit hex value. Other metadata remains supported; when replacing an attributes dictionary, clients must preserve keys they intend to retain. Images are validated as references without server-side fetching; a valid URL can still be unreachable. Image edits never update inventory or order snapshots.
 
 `GET cart/` returns `{items:[{sku_id,quantity,sku:{id,code,label,attributes,price,available,is_active},product:{name,slug,image_url},line_total}],subtotal}`. `POST cart/ {sku_id,quantity}` sets quantity (zero removes). `DELETE cart/` clears.
 

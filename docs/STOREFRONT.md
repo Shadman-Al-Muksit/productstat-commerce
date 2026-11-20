@@ -34,4 +34,12 @@ Apply deliberately: this archives every currently published product outside the 
 - Storefront copy uses “Add to cart” and “Your shopping cart”, with English/Bangla support.
 - All 43 SVGs can be regenerated with `python3 scripts/generate-electronics-art.py`; no external image service is required at runtime.
 
+## Staff image editing and homepage refinement
+
+The staff product drawer provides all 42 electronics library images and an editable public image URL with a preview. It preserves existing custom/legacy references on opening. Each variant exposes its colour name, hex value and independent image, plus **Use product image** to clear the override. Library selection fills the matching colour; a generic colour label follows the change while customized labels are retained. Unrelated attributes, specifications, prices and stock remain intact.
+
+Image controls support existing public assets and hosted HTTPS images. They do not upload files or promise that a third-party URL will remain available. Failed previews show a useful error and retry action. Backend validation applies to product and variant image references and rejects unsafe schemes, path traversal, control characters and malformed colour values.
+
+The homepage uses a shorter hero, functional laptop/category links, compact catalogue controls and a product spotlight. Spotlight price, stock state and product link come from the catalogue API independently of current search filters; an unavailable response shows an explicit unavailable state with no fabricated price.
+
 The full automated purchase, fulfilment, partial-return, refund and analytics journey remains part of the browser suite. Live payment execution, hosting and operational recovery limits remain as recorded in [RELEASE_STATUS.md](RELEASE_STATUS.md).

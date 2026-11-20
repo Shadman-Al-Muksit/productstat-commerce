@@ -1,5 +1,23 @@
 # Validation record
 
+## Settlement, staff image editor and homepage — 20 November 2026
+
+| Check | Result |
+|---|---|
+| Complete PostgreSQL/backend suite | **213 passed in 47.65 seconds** |
+| Final optimized-preview browser suite | **Nine passed in 56.9 seconds** |
+| Django checks and migration consistency | Passed; no model/schema migration |
+| OpenAPI/type regeneration | Passed; API schema/types unchanged |
+| TypeScript, formatting and final production frontend build | Passed |
+
+Settlement tests cover anonymous/customer/analyst/operator/inactive actors, direct service and API calls, administrator/superuser access, partial transfers and replay protection. Denied attempts leave balances, settlement events, order records, inventory movements and financial audit counts unchanged. Operator preparation, dispatch, delivery and COD collection remain supported. A real browser/API regression confirms the operator cannot bypass the hidden settlement control.
+
+Image tests cover allowed references, unsafe schemes, credentials, encoded traversal, controls, malformed colour values, authorized edits and atomic validation failures. Existing stock, prices, order snapshots and unrelated metadata remain intact. The browser edits a synthetic product, selects library and hosted images, exercises failed previews and inheritance, saves/reopens the drawer, checks mobile overflow, and verifies resulting storefront colour selection. Hosted-image responses are mocked in that test; no external image host is required. Synthetic QA products are archived afterward.
+
+The first image-editor browser run exposed an incomplete accessible name on the library dropdown; explicit labels were added and the complete suite rerun successfully. A separate test-selector ambiguity for inherited preview errors was scoped to its product picker. No timeouts were increased. Final screenshots use the optimized app, including [homepage](screenshots/homepage-preview.png), [product image editor](screenshots/staff-image-editor-desktop.png) and [variant image editor](screenshots/staff-variant-image-editor-desktop.png). The homepage test verifies real catalogue pricing and an explicit unavailable state without fabricated prices.
+
+[Sanitized verification summary](evidence/staff-images-settlement-homepage.json) records the environment and checks. These results do not replace the external deployment/payment/backup prerequisites or establish a new load-test result.
+
 ## Electronics storefront update — 20 November 2026
 
 | Check | Result |

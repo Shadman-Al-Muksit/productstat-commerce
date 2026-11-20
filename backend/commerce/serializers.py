@@ -1,10 +1,60 @@
 from decimal import Decimal
-from urllib.parse import urlparse
+import re
+from urllib.parse import unquote, urlsplit
 from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import URLValidator
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from .models import Product,SKU,User,DeliveryZone,CompanySettings
+
+
+def validate_image_reference(value):
+    """Accept public image references without fetching or rewriting their content."""
+    message = 'Use a local /products/ image path or a valid HTTPS image URL without credentials.'
+    if not isinstance(value, str) or len(value) > 1000:
+        raise serializers.ValidationError(message)
+    if value == '':
+        return value
+    if re.search(r'%(?![0-9a-fA-F]{2})', value):
+        raise serializers.ValidationError(message)
+    # Decode repeatedly so encoded/double-encoded traversal and backslashes
+    # cannot turn an approved local asset into another application path.
+    decoded = value
+    while True:
+        next_value = unquote(decoded)
+        if next_value == decoded:
+            break
+        decoded = next_value
+    if (any(ord(char) < 33 or 127 <= ord(char) <= 159 for char in value)
+            or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in decoded)
+            or '\\' in decoded):
+        raise serializers.ValidationError(message)
+    try:
+        parsed = urlsplit(value)
+        decoded_path = parsed.path
+        while True:
+            next_path = unquote(decoded_path)
+            if next_path == decoded_path:
+                break
+            decoded_path = next_path
+        if any(segment in {'.', '..'} for segment in decoded_path.split('/')):
+            raise serializers.ValidationError(message)
+        if value.startswith('/products/'):
+            if parsed.scheme or parsed.netloc or not decoded_path.startswith('/products/'):
+                raise serializers.ValidationError(message)
+            asset_segments = decoded_path[len('/products/'):].split('/')
+            if not all(asset_segments):
+                raise serializers.ValidationError(message)
+        else:
+            URLValidator(schemes=['https'])(value)
+            if (parsed.scheme != 'https' or not parsed.hostname or parsed.username is not None
+                    or parsed.password is not None or (parsed.port is not None and not 1 <= parsed.port <= 65535)):
+                raise serializers.ValidationError(message)
+    except (DjangoValidationError, ValueError):
+        raise serializers.ValidationError(message) from None
+    return value
+
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -38,6 +88,21 @@ class SKUWriteSerializer(serializers.Serializer):
     attributes=serializers.DictField(required=False)
     price=serializers.DecimalField(max_digits=12,decimal_places=2,min_value=Decimal('0'),required=False)
     is_active=serializers.BooleanField(required=False)
+    def validate_attributes(self,value):
+        # Preserve arbitrary product metadata; validate only the image/colour
+        # keys interpreted by the storefront and staff editor.
+        if 'image_url' in value:
+            value['image_url'] = validate_image_reference(value['image_url'])
+        if 'color' in value:
+            color = value['color']
+            if (not isinstance(color, str) or len(color) > 120
+                    or any(ord(char) < 32 or ord(char) == 127 for char in color)):
+                raise serializers.ValidationError({'color': 'Use a colour name of at most 120 characters.'})
+        if 'color_hex' in value:
+            color_hex = value['color_hex']
+            if not isinstance(color_hex, str) or (color_hex and not re.fullmatch(r'#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?', color_hex)):
+                raise serializers.ValidationError({'color_hex': 'Use #RGB or #RRGGBB, or leave blank.'})
+        return value
     def validate(self,value):
         if 'id' not in value and not {'code','price'} <= set(value):
             raise serializers.ValidationError('New SKUs require code and price.')
@@ -49,9 +114,7 @@ class ProductWriteSerializer(serializers.ModelSerializer):
         model=Product
         fields=['name','slug','description','category','image_url','is_active','skus']
     def validate_image_url(self,value):
-        if value and not (value.startswith('/products/') or urlparse(value).scheme=='https'):
-            raise serializers.ValidationError('Use a local /products/ asset or an HTTPS image URL.')
-        return value
+        return validate_image_reference(value)
 
 class RegisterSerializer(serializers.Serializer):
     username=serializers.CharField(max_length=150)

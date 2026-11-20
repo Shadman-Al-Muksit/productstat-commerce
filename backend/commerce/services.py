@@ -10,7 +10,7 @@ from django.conf import settings
 from django.db import connection, transaction
 from django.db.models import Sum
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from .models import (AuditEvent,CompanySettings,DeliveryZone,Order,OrderLine,OutboxEvent,Payment,PaymentSettlement,Refund,RefundLine,ReturnRequest,ReturnLine,Shipment,ShipmentLine,SKU,StockMovement)
 
 def money(value):
@@ -225,6 +225,13 @@ def expire_reservations():
 
 @transaction.atomic
 def order_action(order_id,action,data,actor):
+    # Financial authorization belongs here as well as in the staff interface:
+    # internal callers and direct API requests must enforce the same boundary.
+    if action=='settle_cod' and not (
+        actor and actor.is_authenticated and actor.is_active
+        and (actor.is_superuser or actor.role=='administrator')
+    ):
+        raise PermissionDenied('Only an active administrator can confirm courier settlement.')
     order = Order.objects.select_for_update().get(pk=order_id)
     ensure_live(order)
     if action in ['prepare','dispatch'] and not settings.PRODUCTSTAT_DEMO and order.payments.filter(is_sandbox=True).exists():

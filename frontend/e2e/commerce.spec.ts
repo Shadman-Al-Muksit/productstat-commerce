@@ -15,13 +15,13 @@ async function login(context: APIRequestContext, username = 'administrator') {
 
 test('catalogue, Bangla navigation, keyboard search and mobile layout', async ({page}) => {
   await page.goto('/?ref=walkthrough');
-  await expect(page.locator('a[href^="/products/"]').first()).toBeVisible();
+  await expect(page.getByTestId('product-card').first()).toBeVisible();
   await page.getByRole('button', {name: 'Switch language'}).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'bn');
   await page.getByRole('button', {name: 'Switch language'}).click();
   const search = page.getByRole('textbox', {name: 'Search products'});
   await search.fill(electronicsName);
-  await expect(page.locator('a[href^="/products/"]').first()).toContainText(electronicsName);
+  await expect(page.getByTestId('product-card').first()).toContainText(electronicsName);
   const headerSearch = page.getByRole('textbox', {name: 'Search entire store'});
   await headerSearch.fill('VertexBook');
   await headerSearch.press('Enter');
@@ -57,7 +57,7 @@ test('catalogue, Bangla navigation, keyboard search and mobile layout', async ({
   await expect.poll(() => page.getByTestId('product-card').count()).toBeGreaterThan(3);
   await page.screenshot({path: '../docs/screenshots/storefront-desktop.png', fullPage: true});
   await page.setViewportSize({width: 390, height: 844});
-  await expect(page.locator('a[href^="/products/"]').first()).toBeVisible();
+  await expect(page.getByTestId('product-card').first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBeTruthy();
   await page.screenshot({path: '../docs/screenshots/storefront-mobile.png', fullPage: true});
 });

@@ -1,5 +1,9 @@
 # ProductStat Commerce release status
 
+Latest update, 20 November 2026: courier settlement is administrator/superuser-only at the service boundary, and staff can edit product/variant images and colours with preserved metadata. The homepage now has a more compact layout, working category calls to action and a catalogue-backed product spotlight. **213 backend tests and nine browser journeys passed** against the optimized local build; TypeScript, formatting and the API contract passed. Details and screenshots are in [VALIDATION.md](VALIDATION.md) and [STOREFRONT.md](STOREFRONT.md).
+
+## Electronics catalogue update
+
 20 November 2026 update: the storefront now focuses on electronics with larger typography, teal/navy styling, category browsing, SKU colour imagery and a circular shopping-cart badge. **145 backend tests and six browser journeys passed**; TypeScript, formatting, OpenAPI and the final optimized frontend build passed. The local app uses the optimized preview. [Storefront details](STOREFRONT.md) and [current validation](VALIDATION.md) describe the preservation checks and test environment.
 
 The old mixed catalogue was archived; its transactions, stock and reservation balances remain intact. This does not change the external deployment/payment/backup prerequisites below.

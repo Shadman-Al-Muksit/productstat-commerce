@@ -6,7 +6,7 @@ A Bangladesh electronics store connecting a customer storefront, staff operation
 
 The useful question is not only “what sold?” A manager can follow a product from ordered units to delivery outcomes, accepted returns and confirmed money movements, then inspect the contributing records.
 
-![ProductStat electronics storefront showing synthetic demonstration products](docs/screenshots/storefront-desktop.png)
+![ProductStat electronics storefront showing synthetic demonstration products](docs/screenshots/homepage-preview.png)
 
 See the [release status](docs/RELEASE_STATUS.md) and [validation evidence](docs/VALIDATION.md) for the tested scope and operating limits.
 
@@ -45,6 +45,7 @@ Local development password: `ProductStatDemo!2026`. Production seeding refuses t
 ## Supported workflows
 
 - English/Bangla electronics storefront, catalogue search/filtering, colour-specific product images, persistent cart, guest checkout and customer accounts. Larger typography, category tiles, a search-led header and a circular cart quantity badge support desktop and mobile use.
+- Staff image editing provides the electronics image library, public local/HTTPS references, previews and per-variant colour/image controls. Existing metadata and stock are preserved; courier settlement confirmation requires an active administrator or superuser on the backend.
 - Server-validated prices/charges, atomic reservations, replay-safe checkout and private guest order links.
 - Staff preparation, dispatch, delivery failures, partial cancellation, COD collection and courier settlement.
 - Partial returns, receipt/inspection, stock disposition, refund obligations and verified refund recording.
@@ -77,7 +78,7 @@ bash scripts/load-test.sh             # 20 browsing sessions + five staff sessio
 
 With the application running, execute `npm run test:e2e` from `frontend`. On this WSL1 machine, use Windows Node with the installed Windows Playwright Chromium; the application/database still run in WSL. Set `PLAYWRIGHT_EXECUTABLE_PATH` if a browser location must be supplied.
 
-The initial release passed **136 backend tests, five browser journeys, dependency advisory checks and encrypted recovery**. The electronics update expands backend verification to **145 tests**; its browser results are recorded in the [validation record](docs/VALIDATION.md). The earlier two-minute 25-user API run completed 2,767 requests without errors, with catalogue p95 **79 ms** and analytics p95 **1.956 s**. Those performance measurements describe that earlier workload and environment. A successful local demonstration is not evidence of a hosted production deployment.
+The latest local verification passed **213 backend tests and nine browser journeys**, including settlement authorization, image-editor persistence and homepage product pricing. TypeScript, formatting, OpenAPI and the optimized build passed. The initial release also verified dependency advisory checks and encrypted recovery. The earlier two-minute 25-user API run completed 2,767 requests without errors, with catalogue p95 **79 ms** and analytics p95 **1.956 s**. Those performance measurements describe that earlier workload and environment; see the [validation record](docs/VALIDATION.md). A successful local demonstration is not evidence of a hosted production deployment.
 
 ## Deployment boundary
 

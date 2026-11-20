@@ -1,0 +1,41 @@
+{
+  "verified_at": "2026-11-20T13:05:21.4616432Z",
+  "synthetic_test_data_only": true,
+  "backend": {
+    "environment": "Ubuntu WSL1, Python 3.12, PostgreSQL 17",
+    "duration_seconds": 47.65,
+    "failed": 0,
+    "passed": 213
+  },
+  "browser": {
+    "desktop_width": 1440,
+    "duration_seconds": 56.882,
+    "expect_timeout_ms": 15000,
+    "environment": "Windows Chromium against WSL Gunicorn/standalone Next.js",
+    "failed": 0,
+    "skipped": 0,
+    "passed": 9,
+    "mobile_width": 390,
+    "flaky": 0
+  },
+  "frontend": {
+    "optimized_build": "passed",
+    "formatting": "passed",
+    "typescript": "passed",
+    "api_contract": "validated; unchanged"
+  },
+  "checks": [
+    "operator settlement denied with no financial side effects",
+    "administrator and superuser settlement, partial transfers and replay",
+    "product and variant reference validation",
+    "image edits preserve stock, prices, order snapshots and metadata",
+    "image library, hosted image mock, error preview, variant inheritance and mobile layout",
+    "homepage catalogue pricing, category navigation and unavailable state",
+    "full purchase, fulfilment, partial return, refund and report journeys"
+  ],
+  "limits": [
+    "no image file upload added; public assets and hosted HTTPS references supported",
+    "no external payment or hosting setup established",
+    "load test not rerun"
+  ]
+}
